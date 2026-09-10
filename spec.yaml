@@ -1,0 +1,37 @@
+schemaVersion: "2"
+kind: mixin
+name: sbx-dev
+version: "1.2.0"
+description: Dev sandbox defaults - hunk CLI, SSH signature verification, pinned GitHub host key, no commit attribution
+
+setup:
+  install:
+    - command: npm i -g hunkdiff
+      description: Install the hunk terminal diff viewer
+
+  startup:
+    # Link the skill hunk ships with, so it tracks hunk upgrades instead of drifting.
+    # Skipped when ~/.claude/skills is the shared host mount: a symlink to a sandbox
+    # path would be written into the host's skills dir and dangle there.
+    - command:
+        - bash
+        - -lc
+        - |
+          mountpoint -q "$HOME/.claude/skills" && exit 0
+          [ -e "$HOME/.claude/skills/hunk-review/SKILL.md" ] && exit 0
+          mkdir -p "$HOME/.claude/skills/hunk-review"
+          ln -s "$(hunk skill path)" "$HOME/.claude/skills/hunk-review/SKILL.md"
+      description: Link the bundled hunk-review skill
+
+    # settings.json is created by the sandbox, so patch it at startup rather than
+    # shipping a static file that the runtime would overwrite.
+    - command:
+        - bash
+        - -lc
+        - |
+          f="$HOME/.claude/settings.json"
+          mkdir -p "$(dirname "$f")"
+          [ -s "$f" ] || echo '{}' > "$f"
+          tmp=$(mktemp)
+          jq '.attribution = {"commit": "", "pr": ""}' "$f" > "$tmp" && mv "$tmp" "$f"
+      description: Clear commit and PR attribution
