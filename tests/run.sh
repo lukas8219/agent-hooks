@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# End-to-end tests: real git repos, real rubocop/ruby/python3, driven through
+# End-to-end tests: real git repos, real rubocop/ruby/python3/crystal/ameba, driven through
 # runtime/hook.sh with the payloads Claude Code and Codex each send, using the
 # exact hook commands the plugins register. Run anywhere:
 #   tests/run.sh
@@ -43,8 +43,8 @@ cc_post_bash() { jq -nc --arg c "$1" --arg d "$2" '{hook_event_name:"PostToolUse
 cx_pre_bash()  { jq -nc --arg c "$1" --arg d "$2" '{hook_event_name:"PreToolUse",tool_name:"Bash",cwd:$d,tool_input:{command:$c}}'; }
 
 echo "0. prerequisites"
-for c in jq git ruby python3 rubocop; do
-  command -v "$c" >/dev/null && ok "$c" || no "$c missing (./install.sh deps)"
+for c in jq git ruby python3 rubocop crystal ameba; do
+  command -v "$c" >/dev/null && ok "$c" || no "$c missing (see README.md for dependencies)"
 done
 
 echo "1. lint-changed: advisory after an edit (Claude Code)"
@@ -157,7 +157,7 @@ echo "9. installer"
 h=$(mktemp -d); r=$(new_repo)
 count() { jq "[.hooks // {} | .[][] .hooks[] | select(.command|test(\"$2\"))] | length" "$1"; }
 HOME=$h "$KIT/install.sh" claude --user >/dev/null && HOME=$h "$KIT/install.sh" claude --user >/dev/null
-check "claude --user: all plugins, idempotent" "$(count "$h/.claude/settings.json" runtime/hook.sh)" 6
+check "claude --user: all plugins, idempotent" "$(count "$h/.claude/settings.json" runtime/hook.sh)" 10
 check "attribution cleared" "$(jq -c .attribution "$h/.claude/settings.json")" '{"commit":"","pr":""}'
 HOME=$h "$KIT/install.sh" claude --user --only coding-python >/dev/null
 check "--only narrows and drops the rest" "$(count "$h/.claude/settings.json" runtime/hook.sh)" 2
@@ -169,7 +169,7 @@ HOME=$h "$KIT/install.sh" claude --project "$r" --only coding-ruby >/dev/null
 check "claude --project writes repo settings" "$(count "$r/.claude/settings.json" runtime/hook.sh)" 4
 check "repo settings stay out of git status" "$(git -C "$r" status --porcelain)" ""
 HOME=$h CODEX_HOME=$h/.codex "$KIT/install.sh" codex --user >/dev/null
-check "codex hooks registered" "$(count "$h/.codex/hooks.json" runtime/hook.sh)" 6
+check "codex hooks registered" "$(count "$h/.codex/hooks.json" runtime/hook.sh)" 10
 for s in feature-graph verify-changed; do
   [ -f "$h/.codex/skills/$s/SKILL.md" ] && ok "codex: $s is linked" || no "codex: $s missing"
 done
@@ -262,6 +262,9 @@ echo "11. AIP skill contracts"
 python3 "$KIT/scripts/validate-aip.py" && ok "AIP skills validate offline" || no "AIP validation failed (install tests/requirements.txt)"
 python3 -B -m unittest discover -s "$KIT/tests" -p test_aip.py \
   && ok "AIP contracts and script behavior" || no "AIP contract tests failed"
+
+echo "12. Crystal hooks"
+. "$KIT/tests/crystal.sh"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/runtime/hook.sh\" lint-changed",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/runtime/hook.sh\" lint-changed --lang ruby",
             "timeout": 60,
             "statusMessage": "Linting the lines this commit adds"
           }
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/runtime/hook.sh\" lint-changed",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/runtime/hook.sh\" lint-changed --lang ruby",
             "timeout": 60,
             "statusMessage": "Linting changed lines"
           }

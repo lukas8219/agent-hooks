@@ -32,6 +32,7 @@ lang_for() {
   case "$1" in
     *.rb|*.rake|*.gemspec|*/Gemfile|*/Rakefile) lang=ruby ;;
     *.py) lang=python ;;
+    *.cr) lang=crystal ;;
     *) return 0 ;;
   esac
   case ",${AGENT_HOOKS_LANGS:-$lang}," in *",$lang,"*) echo "$lang" ;; esac

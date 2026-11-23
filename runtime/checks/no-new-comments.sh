@@ -7,7 +7,7 @@
 #                  script) by diffing the work tree against HEAD.
 #
 # Comments come from each language's own lexer (Ruby's Ripper, Python's
-# tokenize), never a regex, so a `#` in a string, URL or heredoc is not one.
+# tokenize, Crystal's parser), never a regex, so a `#` in a string, URL or heredoc is not one.
 # Languages without an exact lexer are skipped rather than guessed at.
 #
 # NO_NEW_COMMENTS_SCOPE:
@@ -19,6 +19,7 @@
 set -uo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$here/../lib/common.sh"
+. "$here/../lib/crystal-comments.sh"
 
 SCOPE=${NO_NEW_COMMENTS_SCOPE:-all}
 ALLOWED="Shebangs, magic/encoding comments and linter directives are allowed."
@@ -30,6 +31,9 @@ phase=$(ev .phase); kind=$(ev .kind); cwd=$(ev .cwd)
 # stdin: source. stdout: "LINE<TAB>TEXT" per comment, functional ones dropped.
 extract() {
   case "$1" in
+    crystal)
+      crystal_comments 2>/dev/null
+      ;;
     ruby)
       command -v ruby >/dev/null || return 0
       ruby -rripper -e '
@@ -82,7 +86,7 @@ fi
 
 if [ "$phase" = post ] && [ "$kind" = shell ]; then
   cmd=$(ev .command)
-  printf '%s' "$cmd" | grep -Eq '>|tee|sed|awk|perl|python|ruby|cat|printf|echo|patch|tr|cp|mv|git' || exit $EXIT_OK
+  printf '%s' "$cmd" | grep -Eq '>|tee|sed|awk|perl|python|ruby|crystal|shards|ameba|cat|printf|echo|patch|tr|cp|mv|git' || exit $EXIT_OK
   root=$(git rev-parse --show-toplevel 2>/dev/null) || exit $EXIT_OK
 
   report=""

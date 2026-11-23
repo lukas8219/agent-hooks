@@ -2,7 +2,8 @@
 
 This file sets up the agent-hooks plugins: `coding-ruby` (RuboCop on the lines
 you change, a RuboCop gate on `git commit`, no new comments), `coding-python`
-(no new comments) and `feature-graph` (the `/feature-graph` and `/verify-changed`
+(no new comments), `coding-crystal` (Ameba on changed lines, an Ameba commit
+gate, no new comments) and `feature-graph` (the `/feature-graph` and `/verify-changed`
 skills). It is
 read either from the kit's own repo or from `~/.claude/CLAUDE.md`, where
 `web/setup.sh` puts it in Claude Code on the web.
@@ -20,7 +21,8 @@ here would register every hook twice.
 1. Find the kit, `KIT`: `/opt/agent-hooks` if it exists, otherwise the
    repository that contains this file.
 2. Make sure the tools exist. This is a no-op when the setup script already
-   ran: `"$KIT/install.sh" deps`
+   ran: `"$KIT/install.sh" deps`. Crystal hooks additionally need `crystal`
+   and `ameba` (or a project's `bin/ameba`); see `README.md` for installation.
 3. Register the hooks in every repository you will edit this session. Start
    with the session's repo, `$CLAUDE_PROJECT_DIR`, or the current directory if
    that is unset:
@@ -35,7 +37,8 @@ here would register every hook twice.
 4. Confirm: `"$KIT/install.sh" status "$CLAUDE_PROJECT_DIR"` should list the
    hooks of each installed plugin. Then check that they are live: use the Write tool to create
    `.agent-hooks-probe.rb` in the repo root with the content `# probe`. Use
-   `.py` instead if only `coding-python` is installed. The
+   `.py` instead if only `coding-python` is installed, or `.cr` for
+   `coding-crystal`. The
    write must be refused. If it goes through, delete the file and tell the
    user that the hooks start working in the next session, because the settings
    file watcher didn't reload them. Don't loop on this.
@@ -46,14 +49,16 @@ hook must never block the work.
 
 ## What the hooks will do to you
 
-- **Edit/Write adding a comment** to Ruby or Python is denied. Re-send the edit
+- **Edit/Write adding a comment** to Ruby, Python or Crystal is denied. Re-send the edit
   without the comment, and make the code explain itself instead. Shebangs,
   magic comments (`# frozen_string_literal`) and linter directives
-  (`# rubocop:disable`) are allowed.
-- **A Bash command that leaves added comments** in uncommitted Ruby/Python
+  (`# rubocop:disable`, `# ameba:disable`) are allowed, as are Crystal formatter directives.
+- **A Bash command that leaves added comments** in uncommitted Ruby/Python/Crystal
   (heredoc, `sed -i`, a script) gets a block message after it runs. Remove
   those comments.
 - **After an edit to a Ruby file**, RuboCop offenses on the changed lines come
   back as context. Fix them when they are yours.
-- **`git commit`** is denied when the lines it adds have RuboCop offenses. Fix
+- **After an edit to a Crystal file**, Ameba issues on the changed lines come
+  back as context. Fix them when they are yours.
+- **`git commit`** is denied when the lines it adds have RuboCop or Ameba offenses. Fix
   the offenses. Don't reach for `--no-verify` unless the user asks for it.

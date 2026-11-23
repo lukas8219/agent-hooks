@@ -9,6 +9,9 @@ on a neutral event and never sees the harness's own payload.
 | `coding-ruby` | after an edit | RuboCop on the changed lines only. Advisory. |
 | | before `git commit` | Denies the commit when the lines it adds have offenses. Catches `git add -A && git commit` and `commit -a`. `--no-verify` bypasses. |
 | | before an edit / after a shell command | No new comments in Ruby, found by Ripper rather than a regex. |
+| `coding-crystal` | after an edit | Ameba on the changed lines only. Advisory. |
+| | before `git commit` | Denies the commit when the lines it adds have Ameba issues. Catches `git add -A && git commit` and `commit -a`. `--no-verify` bypasses. |
+| | before an edit / after a shell command | No new comments in Crystal, found by Crystal's parser. |
 | `coding-python` | before an edit / after a shell command | No new comments in Python, found by `tokenize`. |
 | `feature-graph` | | Includes `/feature-graph` to build the cross-repo graph in Neo4j and `/verify-changed` to plan verification and run local tests for a diff. |
 
@@ -16,7 +19,7 @@ on a neutral event and never sees the harness's own payload.
 
 ```
 runtime/                     the one source of the hook code
-  hook.sh                    entry point: hook.sh <check> [--lang ruby,python]
+  hook.sh                    entry point: hook.sh <check> [--lang ruby,python,crystal]
   checks/                    the logic, harness-neutral: stdin = neutral event, exit 0/2/3
   lib/                       common.sh (the contract, git helpers), render.sh (-> hook JSON)
 plugins/<name>/
@@ -43,11 +46,26 @@ while any copy is stale.
 Dependencies: `jq`, `git`, `ruby`, `python3`, `rubocop` (and `hunk`, optional).
 `./install.sh deps` installs whatever is missing.
 
+Crystal hooks additionally require `crystal` for comment checks and `ameba`
+for linting. On macOS, install them with `brew install crystal ameba`.
+For other platforms, follow the [Crystal installation instructions](https://crystal-lang.org/install/)
+and [Ameba installation instructions](https://github.com/crystal-ameba/ameba#installation).
+The hooks prefer a project's executable `bin/ameba` over `ameba` on PATH and
+respect its `.ameba.yml`. The comment parser is compiled on first use and
+cached under `${XDG_CACHE_HOME:-$HOME/.cache}/agent-hooks`; changes to the
+helper or Crystal version rebuild it. Syntax errors stop comment extraction
+at the point the parser cannot continue. Comment extraction parses source
+without executing it.
+
+Commit linting checks staged Crystal content; files missing from the working
+tree are skipped, as with the Ruby hooks.
+
 **Claude Code:**
 
 ```sh
 /plugin marketplace add lukas8219/agent-hooks
 /plugin install coding-ruby@agent-hooks     # and/or coding-python
+/plugin install coding-crystal@agent-hooks
 /plugin install feature-graph@agent-hooks
 ```
 
@@ -56,6 +74,7 @@ Dependencies: `jq`, `git`, `ruby`, `python3`, `rubocop` (and `hunk`, optional).
 ```sh
 codex plugin marketplace add lukas8219/agent-hooks
 codex plugin add coding-ruby@agent-hooks    # or pick in /plugins
+codex plugin add coding-crystal@agent-hooks
 codex plugin add feature-graph@agent-hooks
 ```
 
