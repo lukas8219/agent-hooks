@@ -10,7 +10,7 @@ on a neutral event and never sees the harness's own payload.
 | | before `git commit` | Denies the commit when the lines it adds have offenses. Catches `git add -A && git commit` and `commit -a`. `--no-verify` bypasses. |
 | | before an edit / after a shell command | No new comments in Ruby, found by Ripper rather than a regex. |
 | `coding-python` | before an edit / after a shell command | No new comments in Python, found by `tokenize`. |
-| `skills` | | Shared skills (`plugins/skills/skills/<name>/SKILL.md`), including `/feature-graph` and `/verify-changed` (below). |
+| `feature-graph` | | Includes `/feature-graph` to build the cross-repo graph in Neo4j and `/verify-changed` to plan verification and run local tests for a diff. |
 
 ## Layout
 
@@ -24,6 +24,7 @@ plugins/<name>/
   plugin.json                Codex manifest
   hooks/hooks.json           the plugin's hooks, shared by both harnesses
   runtime/                   copy of runtime/, made by scripts/sync-runtime.sh
+  skills/<skill>/SKILL.md     related skills and their supporting files
 .claude-plugin/marketplace.json   Claude Code marketplace
 .agents/plugins/marketplace.json  Codex marketplace
 install.sh                   hooks without a plugin manager (and the web setup)
@@ -32,7 +33,7 @@ CLAUDE.md                    tells a Claude Code web session to install the hook
 tests/run.sh                 end-to-end tests
 ```
 
-Each plugin carries its own copy of `runtime/`, because both harnesses copy
+Each hook plugin carries its own copy of `runtime/`, because both harnesses copy
 only the plugin directory into their cache, and Codex drops symlinks on the
 way. Edit `runtime/` and run `scripts/sync-runtime.sh`. `tests/run.sh` fails
 while any copy is stale.
@@ -46,7 +47,8 @@ Dependencies: `jq`, `git`, `ruby`, `python3`, `rubocop` (and `hunk`, optional).
 
 ```sh
 /plugin marketplace add lukas8219/agent-hooks
-/plugin install coding-ruby@agent-hooks     # and/or coding-python, skills
+/plugin install coding-ruby@agent-hooks     # and/or coding-python
+/plugin install feature-graph@agent-hooks
 ```
 
 **Codex:**
@@ -54,13 +56,19 @@ Dependencies: `jq`, `git`, `ruby`, `python3`, `rubocop` (and `hunk`, optional).
 ```sh
 codex plugin marketplace add lukas8219/agent-hooks
 codex plugin add coding-ruby@agent-hooks    # or pick in /plugins
+codex plugin add feature-graph@agent-hooks
 ```
 
-Then open `/hooks` in Codex once and trust the hooks. Installing a plugin
-doesn't trust its hooks.
+For hook plugins, open `/hooks` in Codex once and trust the hooks. Installing
+a plugin doesn't trust its hooks. Installing `feature-graph` includes both skills.
+
+The former `skills` plugin is now named `feature-graph`. If you installed it
+through a plugin manager, uninstall `skills` and install `feature-graph`.
 
 **Without a plugin manager:** `./install.sh claude|codex --user [--only
-coding-ruby,skills]` writes the hooks into the harness settings. Use the
+coding-ruby,feature-graph]` writes the hooks into the harness
+settings and links the selected skills. Rerunning updates existing skill links
+and removes this checkout's links for unselected plugins. Use the
 plugin manager or the script, not both, or every hook runs twice.
 `./install.sh list` shows the plugins, and `./install.sh status [repo]` shows
 what is registered where.
@@ -81,6 +89,9 @@ keeps the file out of git.
   `scripts/sync-runtime.sh`, and add cases to `tests/run.sh`.
 - **New language:** add it to `lang_for` (and to `extract` for comments), then
   add a `plugins/coding-<language>/` that passes `--lang <language>`.
+- **New skill:** add `plugins/<plugin>/skills/<skill>/SKILL.md` to the plugin
+  that owns its workflow. For a new plugin, add both manifests and an entry
+  in each marketplace. Keep supporting files inside the plugin.
 - **New harness:** teach `normalize` in `runtime/hook.sh` its tool names. If
   its response JSON differs, add a renderer beside `runtime/lib/render.sh`.
 
@@ -95,9 +106,10 @@ node with an edge from each side. `/verify-changed` reads that graph for the
 branch's diff, prints a verification plan that includes other repos to test
 or change, and runs the local tests. It never writes to the graph.
 
-Both skills call `plugins/skills/skills/feature-graph/scripts/graph.py`, a
-stdlib-only client for the Neo4j Query API. The model and payload are in
-`feature-graph/references/schema.md`.
+Both skills belong to the `feature-graph` plugin and share
+`plugins/feature-graph/skills/feature-graph/scripts/graph.py`, a stdlib-only
+client for the Neo4j Query API. The model and payload are in
+`plugins/feature-graph/skills/feature-graph/references/schema.md`.
 
 | Env var | |
 |---|---|

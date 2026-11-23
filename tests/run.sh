@@ -133,7 +133,25 @@ done
 for m in .claude-plugin/marketplace.json .agents/plugins/marketplace.json; do
   missing=$(jq -r '.plugins[] | (.source.path? // .source)' "$KIT/$m" | while read -r s; do [ -d "$KIT/$s" ] || echo "$s"; done)
   [ -z "$missing" ] && ok "$m: every source exists" || no "$m: missing $missing"
+  check "$m: lists every plugin once" "$(jq -r '.plugins[].name' "$KIT/$m" | sort)" \
+    "$(for p in "$KIT"/plugins/*/; do basename "$p"; done | sort)"
 done
+p="$KIT/plugins/feature-graph"
+skill_entries=("$p"/skills/*/SKILL.md)
+check "feature-graph: contains both skills" "${#skill_entries[@]}" 2
+for manifest in plugin.json .claude-plugin/plugin.json; do
+  check "feature-graph: $manifest name matches" "$(jq -r .name "$p/$manifest")" feature-graph
+done
+cache_root=$(mktemp -d)
+cp -R "$p" "$cache_root/feature-graph"
+for s in feature-graph verify-changed; do
+  [ -f "$cache_root/feature-graph/skills/$s/SKILL.md" ] \
+    && ok "cached plugin includes $s" || no "cached plugin missing $s"
+done
+check "cached verify-changed reaches the shared client" \
+  "$(python3 -I "$cache_root/feature-graph/skills/verify-changed/../feature-graph/scripts/graph.py" uri neo4j://localhost:7687 | jq -r .base)" \
+  "http://localhost:7474"
+rm -rf "$cache_root"
 
 echo "9. installer"
 h=$(mktemp -d); r=$(new_repo)
@@ -152,17 +170,45 @@ check "claude --project writes repo settings" "$(count "$r/.claude/settings.json
 check "repo settings stay out of git status" "$(git -C "$r" status --porcelain)" ""
 HOME=$h CODEX_HOME=$h/.codex "$KIT/install.sh" codex --user >/dev/null
 check "codex hooks registered" "$(count "$h/.codex/hooks.json" runtime/hook.sh)" 6
+for s in feature-graph verify-changed; do
+  [ -f "$h/.codex/skills/$s/SKILL.md" ] && ok "codex: $s is linked" || no "codex: $s missing"
+done
+[ -f "$h/.codex/skills/verify-changed/../feature-graph/scripts/graph.py" ] \
+  && ok "codex: verify-changed reaches the shared client" || no "codex: shared client missing"
 "$KIT/install.sh" claude --user --only nope >/dev/null 2>&1 && no "unknown plugin accepted" || ok "unknown plugin rejected"
 rm -rf "$h" "$r"
 
 echo "10. feature-graph: graph.py"
-G="python3 -I $KIT/plugins/skills/skills/feature-graph/scripts/graph.py"
+G="python3 -I $KIT/plugins/feature-graph/skills/feature-graph/scripts/graph.py"
 h=$(mktemp -d)
-HOME=$h "$KIT/install.sh" claude --user --only skills >/dev/null
+HOME=$h "$KIT/install.sh" claude --user --only feature-graph >/dev/null
 for s in feature-graph verify-changed; do
   [ -f "$h/.claude/skills/$s/SKILL.md" ] && ok "skill $s is linked" || no "skill $s not linked"
 done
-[ -f "$h/.claude/skills/verify-changed/../feature-graph/scripts/graph.py" ] && ok "verify-changed reaches graph.py" || no "verify-changed cannot reach graph.py"
+r=$(new_repo)
+mkdir -p "$r/.claude/skills/foreign"
+printf 'foreign skill\n' > "$r/.claude/skills/foreign/SKILL.md"
+ln -s "$r/.claude/skills/foreign" "$r/.claude/skills/foreign-link"
+for s in feature-graph verify-changed; do
+  ln -s "$KIT/plugins/skills/skills/$s" "$r/.claude/skills/$s"
+done
+for attempt in 1 2; do
+  "$KIT/install.sh" claude --project "$r" --only feature-graph >/dev/null
+  for s in feature-graph verify-changed; do
+    [ -f "$r/.claude/skills/$s/SKILL.md" ] \
+      && ok "install $attempt: feature-graph includes $s" || no "install $attempt: $s not installed"
+  done
+done
+check "installed verify-changed reaches the shared client" \
+  "$(python3 -I "$r/.claude/skills/verify-changed/../feature-graph/scripts/graph.py" uri http://db:17474/ | jq -r .base)" "http://db:17474"
+check "feature-graph install adds no hooks" "$(count "$r/.claude/settings.json" runtime/hook.sh)" 0
+[ -f "$r/.claude/skills/foreign/SKILL.md" ] && [ -L "$r/.claude/skills/foreign-link" ] \
+  && ok "foreign skills and links are kept" || no "foreign skills were removed"
+"$KIT/install.sh" claude --project "$r" --only coding-python >/dev/null
+for s in feature-graph verify-changed; do
+  [ ! -L "$r/.claude/skills/$s" ] && ok "hook-only selection removes $s" || no "unselected $s still linked"
+done
+rm -rf "$r"
 check "neo4j+s:// -> https" "$($G uri neo4j+s://abc.databases.neo4j.io | jq -r .base)" "https://abc.databases.neo4j.io"
 check "neo4j:// -> http :7474" "$($G uri neo4j://localhost:7687 | jq -r .base)" "http://localhost:7474"
 check "http passes through" "$($G uri http://db:17474/ | jq -r .base)" "http://db:17474"

@@ -2,7 +2,8 @@
 
 This file sets up the agent-hooks plugins: `coding-ruby` (RuboCop on the lines
 you change, a RuboCop gate on `git commit`, no new comments), `coding-python`
-(no new comments) and `skills`. It is
+(no new comments) and `feature-graph` (the `/feature-graph` and `/verify-changed`
+skills). It is
 read either from the kit's own repo or from `~/.claude/CLAUDE.md`, where
 `web/setup.sh` puts it in Claude Code on the web.
 
@@ -25,7 +26,7 @@ here would register every hook twice.
    that is unset:
    `"$KIT/install.sh" claude --project "$CLAUDE_PROJECT_DIR"`
    That installs every plugin (`"$KIT/install.sh" list`). If the user named
-   only some, pass them, as in `--only coding-ruby,skills`.
+   only some, pass them, as in `--only coding-ruby,feature-graph`.
    Cloud sessions don't read `~/.claude/settings.json`, so the hooks must go in
    the repo's `.claude/settings.json`. The installer keeps that file out of
    git: it adds it to `.git/info/exclude` when the repo doesn't track it, and
