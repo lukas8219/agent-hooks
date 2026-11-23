@@ -1,7 +1,23 @@
 {
   "name": "agent-hooks",
-  "owner": {"name": "Lucas Polesello"},
+  "owner": {
+    "name": "Lucas Polesello"
+  },
   "plugins": [
-    {"name": "agent-hooks", "source": "./", "description": "RuboCop on changed lines, commit gate, no-new-comments guard"}
+    {
+      "name": "coding-ruby",
+      "source": "./plugins/coding-ruby",
+      "description": "Ruby guards: RuboCop on changed lines, a RuboCop gate on git commit, and no new comments"
+    },
+    {
+      "name": "coding-python",
+      "source": "./plugins/coding-python",
+      "description": "Python guards: no new comments (tokenize-based)"
+    },
+    {
+      "name": "skills",
+      "source": "./plugins/skills",
+      "description": "Shared skills for coding agents"
+    }
   ]
 }

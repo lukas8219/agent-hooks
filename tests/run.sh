@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # End-to-end tests: real git repos, real rubocop/ruby/python3, driven through
-# both harness adapters with the payloads each harness sends. Run anywhere:
+# runtime/hook.sh with the payloads Claude Code and Codex each send, using the
+# exact hook commands the plugins register. Run anywhere:
 #   tests/run.sh
 set -uo pipefail
 KIT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-CC=$KIT/adapters/claude-code.sh
-CX=$KIT/adapters/codex.sh
+HOOK=$KIT/runtime/hook.sh
+# Both harnesses share one entry point; the names keep the payload origin clear.
+CC=$HOOK
+CX=$HOOK
 
 pass=0; fail=0
 ok()   { printf '  \033[32mPASS\033[0m %s\n' "$1"; pass=$((pass+1)); }
@@ -102,26 +105,54 @@ check "scope=new-code spares old code"     "$(cc_post_bash 'sed -i x' "$t" | NO_
 check "scope=all catches the annotation"   "$(cc_post_bash 'sed -i x' "$t" | "$CC" no-new-comments | verdict)" block
 rm -rf "$t"
 
-echo "6. adapters stay quiet on what they don't handle"
+echo "6. --lang keeps each coding-<language> plugin to its own files"
+check "ruby plugin ignores python comment"  "$(jq -nc '{hook_event_name:"PreToolUse",tool_name:"Edit",tool_input:{file_path:"/tmp/v.py",old_string:"x",new_string:"# n\nx"}}' | "$HOOK" no-new-comments --lang ruby | verdict)" allow
+check "python plugin catches python comment" "$(jq -nc '{hook_event_name:"PreToolUse",tool_name:"Edit",tool_input:{file_path:"/tmp/v.py",old_string:"x",new_string:"# n\nx"}}' | "$HOOK" no-new-comments --lang python | verdict)" deny
+check "python plugin ignores ruby comment"  "$(jq -nc '{hook_event_name:"PreToolUse",tool_name:"Edit",tool_input:{file_path:"/tmp/v.rb",old_string:"x",new_string:"# n\nx"}}' | "$HOOK" no-new-comments --lang python | verdict)" allow
+t=$(new_repo); printf '# c\nx = 1\n' > "$t/b.py"
+check "post-shell: ruby plugin skips .py"    "$(cc_post_bash 'cat > b.py' "$t" | "$HOOK" no-new-comments --lang ruby | verdict)" allow
+check "post-shell: python plugin blocks .py" "$(cc_post_bash 'cat > b.py' "$t" | "$HOOK" no-new-comments --lang python | verdict)" block
+rm -rf "$t"
+
+echo "7. hook.sh stays quiet on what it doesn't handle"
 check "SessionStart ignored"  "$(echo '{"hook_event_name":"SessionStart"}' | "$CC" lint-changed | verdict)" allow
 check "Read tool ignored"     "$(echo '{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{}}' | "$CC" no-new-comments | verdict)" allow
 check "garbage stdin ignored" "$(echo 'not json' | "$CX" no-new-comments | verdict)" allow
 
-echo "7. installer"
+echo "8. plugins"
+for p in "$KIT"/plugins/*/; do
+  n=$(basename "$p")
+  jq -e .name "$p/.claude-plugin/plugin.json" >/dev/null 2>&1 && jq -e .name "$p/plugin.json" >/dev/null 2>&1 \
+    && ok "$n: both manifests parse" || no "$n: manifest missing or invalid"
+  [ -f "$p/hooks/hooks.json" ] || continue
+  [ ! -L "$p/runtime" ] && diff -r "$KIT/runtime" "$p/runtime" >/dev/null 2>&1 \
+    && ok "$n: runtime copy matches runtime/" || no "$n: runtime stale or a symlink (scripts/sync-runtime.sh)"
+  bad=$(jq -r '.hooks[][] .hooks[].command' "$p/hooks/hooks.json" | sed 's/"//g; s/ .*//; s|\${CLAUDE_PLUGIN_ROOT}|'"${p%/}"'|' | while read -r c; do [ -x "$c" ] || echo "$c"; done)
+  [ -z "$bad" ] && ok "$n: every hook command resolves" || no "$n: unresolved $bad"
+done
+for m in .claude-plugin/marketplace.json .agents/plugins/marketplace.json; do
+  missing=$(jq -r '.plugins[] | (.source.path? // .source)' "$KIT/$m" | while read -r s; do [ -d "$KIT/$s" ] || echo "$s"; done)
+  [ -z "$missing" ] && ok "$m: every source exists" || no "$m: missing $missing"
+done
+
+echo "9. installer"
 h=$(mktemp -d); r=$(new_repo)
+count() { jq "[.hooks // {} | .[][] .hooks[] | select(.command|test(\"$2\"))] | length" "$1"; }
 HOME=$h "$KIT/install.sh" claude --user >/dev/null && HOME=$h "$KIT/install.sh" claude --user >/dev/null
-check "claude --user registers 4 hooks, idempotent" \
-  "$(jq '[.hooks[][] .hooks[] | select(.command|test("adapters/claude-code.sh"))] | length' "$h/.claude/settings.json")" 4
+check "claude --user: all plugins, idempotent" "$(count "$h/.claude/settings.json" runtime/hook.sh)" 6
 check "attribution cleared" "$(jq -c .attribution "$h/.claude/settings.json")" '{"commit":"","pr":""}'
-HOME=$h "$KIT/install.sh" claude --project "$r" >/dev/null
-check "claude --project writes repo settings" \
-  "$(jq '[.hooks[][] .hooks[]] | length' "$r/.claude/settings.json")" 4
+HOME=$h "$KIT/install.sh" claude --user --only coding-python >/dev/null
+check "--only narrows and drops the rest" "$(count "$h/.claude/settings.json" runtime/hook.sh)" 2
+check "--only keeps only python hooks" "$(count "$h/.claude/settings.json" 'coding-python/')" 2
+echo '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"mine.sh"}]}]}}' > "$h/.claude/settings.json"
+HOME=$h "$KIT/install.sh" claude --user --only coding-ruby >/dev/null
+check "foreign hooks are kept" "$(count "$h/.claude/settings.json" mine.sh)" 1
+HOME=$h "$KIT/install.sh" claude --project "$r" --only coding-ruby >/dev/null
+check "claude --project writes repo settings" "$(count "$r/.claude/settings.json" runtime/hook.sh)" 4
 check "repo settings stay out of git status" "$(git -C "$r" status --porcelain)" ""
 HOME=$h CODEX_HOME=$h/.codex "$KIT/install.sh" codex --user >/dev/null
-check "codex uses apply_patch matcher" \
-  "$(jq -r '.hooks.PreToolUse[] | select(.hooks[0].command|test("no-new-comments")) | .matcher' "$h/.codex/hooks.json")" apply_patch
-check "codex commands point at codex.sh" \
-  "$(jq '[.hooks[][] .hooks[] | select(.command|test("adapters/codex.sh"))] | length' "$h/.codex/hooks.json")" 4
+check "codex hooks registered" "$(count "$h/.codex/hooks.json" runtime/hook.sh)" 6
+"$KIT/install.sh" claude --user --only nope >/dev/null 2>&1 && no "unknown plugin accepted" || ok "unknown plugin rejected"
 rm -rf "$h" "$r"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"

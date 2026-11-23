@@ -1,7 +1,8 @@
 # agent-hooks: install the hooks before you start work
 
-This file sets up the agent-hooks kit: RuboCop on the lines you change, a
-RuboCop gate on `git commit`, and a guard that refuses new code comments. It is
+This file sets up the agent-hooks plugins: `coding-ruby` (RuboCop on the lines
+you change, a RuboCop gate on `git commit`, no new comments), `coding-python`
+(no new comments) and `skills`. It is
 read either from the kit's own repo or from `~/.claude/CLAUDE.md`, where
 `web/setup.sh` puts it in Claude Code on the web.
 
@@ -10,7 +11,7 @@ read either from the kit's own repo or from `~/.claude/CLAUDE.md`, where
 Do this once, at the start of the session, **before any other work**, when
 `CLAUDE_CODE_REMOTE` is `true` (Claude Code on the web). Check with
 `echo "$CLAUDE_CODE_REMOTE"`. On a local machine, do nothing: there the kit is
-installed as a plugin or with `install.sh claude --user`, and running it again
+installed with `/plugin` or with `install.sh claude --user`, and running it again
 here would register every hook twice.
 
 ## Steps
@@ -23,14 +24,17 @@ here would register every hook twice.
    with the session's repo, `$CLAUDE_PROJECT_DIR`, or the current directory if
    that is unset:
    `"$KIT/install.sh" claude --project "$CLAUDE_PROJECT_DIR"`
+   That installs every plugin (`"$KIT/install.sh" list`). If the user named
+   only some, pass them, as in `--only coding-ruby,skills`.
    Cloud sessions don't read `~/.claude/settings.json`, so the hooks must go in
    the repo's `.claude/settings.json`. The installer keeps that file out of
    git: it adds it to `.git/info/exclude` when the repo doesn't track it, and
    marks it `skip-worktree` when the repo does. Don't undo either, and never
    commit `.claude/settings.json` changes that point at `/opt/agent-hooks`.
-4. Confirm: `"$KIT/install.sh" status "$CLAUDE_PROJECT_DIR"` should list four
-   hooks. Then check that they are live: use the Write tool to create
-   `.agent-hooks-probe.rb` in the repo root with the content `# probe`. The
+4. Confirm: `"$KIT/install.sh" status "$CLAUDE_PROJECT_DIR"` should list the
+   hooks of each installed plugin. Then check that they are live: use the Write tool to create
+   `.agent-hooks-probe.rb` in the repo root with the content `# probe`. Use
+   `.py` instead if only `coding-python` is installed. The
    write must be refused. If it goes through, delete the file and tell the
    user that the hooks start working in the next session, because the settings
    file watcher didn't reload them. Don't loop on this.

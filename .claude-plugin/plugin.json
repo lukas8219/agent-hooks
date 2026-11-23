@@ -1,8 +1,0 @@
-{
-  "name": "agent-hooks",
-  "version": "4.0.0",
-  "description": "Harness-neutral guards: RuboCop on changed lines with a commit gate, and a lexer-based no-new-comments guard",
-  "author": {
-    "name": "Lucas Polesello"
-  }
-}

@@ -1,17 +1,17 @@
 # Runs one check on a normalized event and prints the hook response.
-# Sourced by the adapters. Claude Code and Codex read the same response shape;
-# a harness that differs gets its own renderer next to this one.
+# Sourced by hook.sh. Claude Code and Codex read the same response shape; a
+# harness that differs gets its own renderer next to this one.
 #
 #   run_check <check-name> <normalized-event-json>
 
-KIT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+RUNTIME=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
 run_check() {
   local check=$1 event=$2 phase report code event_name summary
   phase=$(printf '%s' "$event" | jq -r .phase)
   [ "$phase" = pre ] && event_name=PreToolUse || event_name=PostToolUse
 
-  report=$(printf '%s' "$event" | "$KIT_ROOT/checks/$check.sh")
+  report=$(printf '%s' "$event" | "$RUNTIME/checks/$check.sh")
   code=$?
   summary=$(printf '%s\n' "$report" | head -1)
 

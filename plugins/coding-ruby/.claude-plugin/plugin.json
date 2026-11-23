@@ -1,0 +1,9 @@
+{
+  "name": "coding-ruby",
+  "version": "5.0.0",
+  "description": "Ruby guards: RuboCop on changed lines, a RuboCop gate on git commit, and no new comments",
+  "author": {
+    "name": "Lucas Polesello"
+  },
+  "repository": "https://github.com/lukas8219/agent-hooks"
+}

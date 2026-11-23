@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/runtime/hook.sh\" no-new-comments --lang python",
+            "timeout": 30,
+            "statusMessage": "Checking for new comments"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/runtime/hook.sh\" no-new-comments --lang python",
+            "timeout": 30,
+            "statusMessage": "Checking for new comments"
+          }
+        ]
+      }
+    ]
+  }
+}

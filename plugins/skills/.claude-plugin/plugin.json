@@ -1,0 +1,9 @@
+{
+  "name": "skills",
+  "version": "5.0.0",
+  "description": "Shared skills for coding agents",
+  "author": {
+    "name": "Lucas Polesello"
+  },
+  "repository": "https://github.com/lukas8219/agent-hooks"
+}

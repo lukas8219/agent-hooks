@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
-# Registers this kit's hooks (and skills) with an agent harness.
+# Registers this kit's plugins with an agent harness without a plugin manager.
 #
-#   ./install.sh deps                         install jq/ruby/rubocop/hunk where missing
-#   ./install.sh claude --user                ~/.claude/settings.json
-#   ./install.sh claude --project <repo>      <repo>/.claude/settings.json (cloud sessions)
-#   ./install.sh codex  --user                ${CODEX_HOME:-~/.codex}/hooks.json
-#   ./install.sh codex  --project <repo>      <repo>/.codex/hooks.json
-#   ./install.sh status                       show what is registered where
+#   ./install.sh deps                                install jq/ruby/rubocop/hunk where missing
+#   ./install.sh claude --user          [--only ...] ~/.claude/settings.json
+#   ./install.sh claude --project <dir> [--only ...] <dir>/.claude/settings.json (cloud sessions)
+#   ./install.sh codex  --user          [--only ...] ${CODEX_HOME:-~/.codex}/hooks.json
+#   ./install.sh codex  --project <dir> [--only ...] <dir>/.codex/hooks.json
+#   ./install.sh status [dir]                        show what is registered where
+#   ./install.sh list                                list the plugins
 #
-# hooks/hooks.json is the one source of truth: it is the Claude Code plugin's
-# hook file as-is, and is rewritten here with absolute paths for settings
-# files and with Codex's tool names for Codex. Re-running is idempotent: every
-# entry pointing at an adapters/ script is replaced, so moving the kit is fine.
+# --only takes a comma-separated list of plugins (see `list`); default is all.
 #
-# Pick one route per harness: either the Claude Code plugin or `claude --user`,
-# not both, or every hook runs twice.
+# Each plugins/<name>/hooks/hooks.json is the plugin's own hook file, used
+# as-is by /plugin (Claude Code) and /plugins (Codex). Here those files are
+# merged into the harness settings with ${CLAUDE_PLUGIN_ROOT} made absolute.
+# Re-running is idempotent: every entry pointing at runtime/hook.sh is
+# replaced, so moving the kit or narrowing --only is fine.
+#
+# Pick one route per harness, the plugin manager or this script, not both, or
+# every hook runs twice.
 set -euo pipefail
 KIT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
@@ -23,42 +27,62 @@ say() { printf '  %s\n' "$*"; }
 
 need_jq() { command -v jq >/dev/null || die "jq is required (./install.sh deps)"; }
 
-# hooks/hooks.json, re-targeted at one harness.
-hooks_for() {
-  local harness=$1
-  jq --arg kit "$KIT" --arg harness "$harness" '
-    .hooks | walk(
-      if type == "object" and has("command") then
-        .command |= (gsub("\\$\\{CLAUDE_PLUGIN_ROOT\\}"; $kit)
-                     | if $harness == "codex" then sub("claude-code.sh"; "codex.sh") else . end)
-      elif type == "object" and has("matcher") and $harness == "codex" then
-        .matcher |= (if . == "Write|Edit|MultiEdit" then "apply_patch" else . end)
-      else . end)' "$KIT/hooks/hooks.json"
+all_plugins() { for p in "$KIT"/plugins/*/; do basename "$p"; done; }
+
+SCOPE="" DIR="" ONLY=""
+parse_args() {
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --user) SCOPE=user ;;
+      --project) SCOPE=project; DIR=${2:-}; shift
+                 [ -d "$DIR" ] || die "--project needs an existing directory"
+                 DIR=$(cd "$DIR" && pwd) ;;
+      --only) ONLY=${2:-}; shift ;;
+      *) die "unknown argument: $1" ;;
+    esac
+    shift
+  done
+  [ -n "$SCOPE" ] || die "expected --user or --project <dir>"
+  [ -n "$ONLY" ] || ONLY=$(all_plugins | paste -sd, -)
+  local p
+  for p in ${ONLY//,/ }; do [ -d "$KIT/plugins/$p" ] || die "no such plugin: $p (./install.sh list)"; done
+}
+
+# The selected plugins' hooks, one {Event: [groups]} object.
+selected_hooks() {
+  local p f
+  for p in ${ONLY//,/ }; do
+    f=$KIT/plugins/$p/hooks/hooks.json
+    [ -f "$f" ] || continue
+    jq --arg root "$KIT/plugins/$p" \
+      '.hooks | walk(if type == "object" and has("command")
+                     then .command |= gsub("\\$\\{CLAUDE_PLUGIN_ROOT\\}"; $root) else . end)' "$f"
+  done | jq -s 'reduce .[] as $h ({}; reduce ($h | keys[]) as $e (.; .[$e] += $h[$e]))'
 }
 
 # Merges our hooks into a settings/hooks file, dropping earlier copies of ours.
 merge_hooks() {
-  local file=$1 harness=$2 extra=${3:-'{}'} ours tmp
+  local file=$1 extra=${2:-'{}'} ours tmp
   mkdir -p "$(dirname "$file")"
   [ -s "$file" ] || echo '{}' > "$file"
-  ours=$(hooks_for "$harness")
+  ours=$(selected_hooks)
   tmp=$(mktemp)
   jq --argjson ours "$ours" --argjson extra "$extra" '
-    def mine: (.command? // "") | test("/adapters/(claude-code|codex)\\.sh");
+    def mine: (.command? // "") | test("/runtime/hook\\.sh|/adapters/(claude-code|codex)\\.sh");
     . * $extra
     | .hooks //= {}
-    | reduce ($ours | keys[]) as $ev (.;
-        .hooks[$ev] = (
-          [ (.hooks[$ev] // [])[] | .hooks |= map(select(mine | not)) | select(.hooks | length > 0) ]
-          + $ours[$ev]))' "$file" > "$tmp"
+    | .hooks |= with_entries(.value |= [ .[] | .hooks |= map(select(mine | not)) | select(.hooks | length > 0) ])
+    | reduce ($ours | keys[]) as $ev (.; .hooks[$ev] += $ours[$ev])
+    | .hooks |= with_entries(select(.value | length > 0))' "$file" > "$tmp"
   mv "$tmp" "$file"
-  say "hooks -> $file"
+  say "plugins ${ONLY//,/, } -> $file"
 }
 
 link_skills() {
   local dest=$1 s name
+  case ",$ONLY," in *,skills,*) ;; *) return 0 ;; esac
   mkdir -p "$dest"
-  for s in "$KIT"/skills/*/; do
+  for s in "$KIT"/plugins/skills/skills/*/; do
     [ -f "$s/SKILL.md" ] || continue
     name=$(basename "$s")
     ln -sfn "${s%/}" "$dest/$name"
@@ -75,6 +99,7 @@ link_skills() {
 keep_out_of_git() {
   local repo=$1 rel=$2
   git -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || return 0
+  [ -e "$repo/$rel" ] || return 0
   if git -C "$repo" ls-files --error-unmatch "$rel" >/dev/null 2>&1; then
     git -C "$repo" update-index --skip-worktree "$rel"
     say "$rel is tracked: marked skip-worktree so our edits stay out of commits"
@@ -89,43 +114,29 @@ keep_out_of_git() {
   fi
 }
 
-target() {
-  case "${1:-}" in
-    --user) echo user ;;
-    --project) [ -d "${2:-}" ] || die "--project needs an existing directory"; echo project ;;
-    *) die "expected --user or --project <dir>" ;;
-  esac
-}
-
 install_claude() {
-  need_jq
-  local scope repo file prefs
-  scope=$(target "$@")
+  need_jq; parse_args "$@"
+  local prefs
   prefs=$(cat "$KIT/config/claude-settings.json")
-  if [ "$scope" = user ]; then
-    merge_hooks "$HOME/.claude/settings.json" claude "$prefs"
+  if [ "$SCOPE" = user ]; then
+    merge_hooks "$HOME/.claude/settings.json" "$prefs"
     link_skills "$HOME/.claude/skills"
   else
-    repo=$(cd "$2" && pwd)
-    file=$repo/.claude/settings.json
-    merge_hooks "$file" claude "$prefs"
-    keep_out_of_git "$repo" .claude/settings.json
-    link_skills "$repo/.claude/skills"
-    keep_out_of_git "$repo" .claude/skills
+    merge_hooks "$DIR/.claude/settings.json" "$prefs"
+    keep_out_of_git "$DIR" .claude/settings.json
+    link_skills "$DIR/.claude/skills"
+    keep_out_of_git "$DIR" .claude/skills
   fi
 }
 
 install_codex() {
-  need_jq
-  local scope repo
-  scope=$(target "$@")
-  if [ "$scope" = user ]; then
-    merge_hooks "${CODEX_HOME:-$HOME/.codex}/hooks.json" codex
+  need_jq; parse_args "$@"
+  if [ "$SCOPE" = user ]; then
+    merge_hooks "${CODEX_HOME:-$HOME/.codex}/hooks.json"
     link_skills "${CODEX_HOME:-$HOME/.codex}/skills"
   else
-    repo=$(cd "$2" && pwd)
-    merge_hooks "$repo/.codex/hooks.json" codex
-    keep_out_of_git "$repo" .codex/hooks.json
+    merge_hooks "$DIR/.codex/hooks.json"
+    keep_out_of_git "$DIR" .codex/hooks.json
   fi
   say "Codex skips new or changed hooks until you trust them: run /hooks in Codex once."
 }
@@ -163,7 +174,15 @@ status() {
     [ -r "$f" ] || continue
     echo "$f"
     jq -r '.hooks // {} | to_entries[] | .key as $e | .value[] | .matcher as $m
-           | .hooks[] | select(.command | test("/adapters/")) | "  \($e) \($m) -> \(.command)"' "$f"
+           | .hooks[] | select(.command | test("/runtime/hook\\.sh"))
+           | "  \($e) \($m) -> \(.command | sub(".*/plugins/"; ""))"' "$f"
+  done
+}
+
+list() {
+  local p
+  for p in $(all_plugins); do
+    printf '  %-14s %s\n' "$p" "$(jq -r .description "$KIT/plugins/$p/.claude-plugin/plugin.json")"
   done
 }
 
@@ -173,5 +192,6 @@ case "$cmd" in
   claude) install_claude "$@" ;;
   codex)  install_codex "$@" ;;
   status) status "$@" ;;
-  *) sed -n '2,12p' "$0"; exit 1 ;;
+  list)   list ;;
+  *) sed -n '2,13p' "$0"; exit 1 ;;
 esac

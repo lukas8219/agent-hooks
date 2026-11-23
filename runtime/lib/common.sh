@@ -3,7 +3,7 @@
 # The neutral contract every check speaks, so no check ever sees a harness's
 # own payload:
 #
-#   stdin   one normalized event (built by an adapter in adapters/):
+#   stdin   one normalized event (built by hook.sh from the harness payload):
 #             {
 #               "phase":   "pre" | "post",
 #               "kind":    "shell" | "edit",
@@ -14,9 +14,9 @@
 #             }
 #   stdout  a report; its first line is a one-line summary
 #   exit    0  nothing to say
-#           2  violation: the adapter denies (pre) or blocks (post)
-#           3  advisory: the adapter passes the report to the agent as context
-#           *  the check itself failed: the adapter fails open
+#           2  violation: denied (pre) or blocked (post)
+#           3  advisory: the report goes to the agent as context
+#           *  the check itself failed: the action is let through
 
 EXIT_OK=0
 EXIT_VIOLATION=2
@@ -24,12 +24,17 @@ EXIT_ADVISORY=3
 
 ev() { printf '%s' "$EVENT" | jq -r "$1 // empty"; }
 
+# The file's language, or nothing when the file is not ours to check: an
+# unknown language, or one left out of AGENT_HOOKS_LANGS (comma-separated,
+# set by hook.sh --lang; unset means every language).
 lang_for() {
+  local lang
   case "$1" in
-    *.rb|*.rake|*.gemspec|*/Gemfile|*/Rakefile) echo ruby ;;
-    *.py) echo python ;;
-    *) echo "" ;;
+    *.rb|*.rake|*.gemspec|*/Gemfile|*/Rakefile) lang=ruby ;;
+    *.py) lang=python ;;
+    *) return 0 ;;
   esac
+  case ",${AGENT_HOOKS_LANGS:-$lang}," in *",$lang,"*) echo "$lang" ;; esac
 }
 
 is_ruby() { [ "$(lang_for "$1")" = ruby ]; }
