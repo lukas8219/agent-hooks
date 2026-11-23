@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/adapters/claude-code.sh\" no-new-comments", "timeout": 30, "statusMessage": "Checking for new comments"}]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/adapters/claude-code.sh\" lint-changed", "timeout": 60, "statusMessage": "Linting staged lines"}]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/adapters/claude-code.sh\" lint-changed", "timeout": 60, "statusMessage": "Linting changed lines"}]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/adapters/claude-code.sh\" no-new-comments", "timeout": 30, "statusMessage": "Checking for new comments"}]
+      }
+    ]
+  }
+}

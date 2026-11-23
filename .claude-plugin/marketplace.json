@@ -1,0 +1,7 @@
+{
+  "name": "agent-hooks",
+  "owner": {"name": "Lucas Polesello"},
+  "plugins": [
+    {"name": "agent-hooks", "source": "./", "description": "RuboCop on changed lines, commit gate, no-new-comments guard"}
+  ]
+}
