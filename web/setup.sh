@@ -7,6 +7,9 @@
 # installed user-wide. Instead this clones the kit and appends its CLAUDE.md
 # to ~/.claude/CLAUDE.md, which tells Claude to register the hooks in the
 # working repo's .claude/settings.json at the start of every session.
+# Set AGENT_HOOKS_GIT_NAME and AGENT_HOOKS_GIT_EMAIL in the environment's
+# variables to use your own Git identity at session startup. Setup runs before
+# those variables are loaded; export them in this script too for global config.
 set -euo pipefail
 
 REPO=${AGENT_HOOKS_REPO:-https://github.com/lukas8219/agent-hooks.git}
@@ -19,6 +22,7 @@ else
 fi
 
 "$DEST/install.sh" deps
+"$DEST/install.sh" git-identity --user
 
 mkdir -p "$HOME/.claude"
 marker="<!-- agent-hooks -->"
