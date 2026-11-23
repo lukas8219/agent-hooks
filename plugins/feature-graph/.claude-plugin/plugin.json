@@ -1,7 +1,7 @@
 {
-  "name": "skills",
+  "name": "feature-graph",
   "version": "5.0.0",
-  "description": "Shared skills for coding agents",
+  "description": "Map cross-repository features in Neo4j and verify changed code",
   "author": {
     "name": "Lucas Polesello"
   },

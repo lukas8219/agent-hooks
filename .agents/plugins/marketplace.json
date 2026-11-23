@@ -29,10 +29,10 @@
       "category": "Productivity"
     },
     {
-      "name": "skills",
+      "name": "feature-graph",
       "source": {
         "source": "local",
-        "path": "./plugins/skills"
+        "path": "./plugins/feature-graph"
       },
       "policy": {
         "installation": "AVAILABLE",
