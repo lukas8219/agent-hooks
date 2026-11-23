@@ -79,16 +79,24 @@ merge_hooks() {
 }
 
 link_skills() {
-  local dest=$1 s name
-  case ",$ONLY," in *,skills,*) ;; *) return 0 ;; esac
-  mkdir -p "$dest"
-  for s in "$KIT"/plugins/skills/skills/*/; do
-    [ -f "$s/SKILL.md" ] || continue
-    name=$(basename "$s")
-    ln -sfn "${s%/}" "$dest/$name"
-    say "skill $name -> $dest/$name"
+  local dest=$1 p s name linked=false
+  for s in "$dest"/*; do
+    [ -L "$s" ] || continue
+    case "$(readlink "$s")" in
+      "$KIT"/plugins/*/skills/*) rm "$s" ;;
+    esac
   done
-  if command -v hunk >/dev/null && [ ! -e "$dest/hunk-review/SKILL.md" ]; then
+  for p in ${ONLY//,/ }; do
+    for s in "$KIT/plugins/$p/skills"/*/; do
+      [ -f "$s/SKILL.md" ] || continue
+      mkdir -p "$dest"
+      name=$(basename "$s")
+      ln -sfn "${s%/}" "$dest/$name"
+      say "skill $name -> $dest/$name"
+      linked=true
+    done
+  done
+  if [ "$linked" = true ] && command -v hunk >/dev/null && [ ! -e "$dest/hunk-review/SKILL.md" ]; then
     mkdir -p "$dest/hunk-review"
     ln -sfn "$(hunk skill path)" "$dest/hunk-review/SKILL.md" && say "skill hunk-review -> $dest/hunk-review"
   fi

@@ -15,9 +15,9 @@
       "description": "Python guards: no new comments (tokenize-based)"
     },
     {
-      "name": "skills",
-      "source": "./plugins/skills",
-      "description": "Shared skills for coding agents"
+      "name": "feature-graph",
+      "source": "./plugins/feature-graph",
+      "description": "Map cross-repository features in Neo4j and verify changed code"
     }
   ]
 }
