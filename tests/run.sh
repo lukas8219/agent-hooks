@@ -178,6 +178,9 @@ done
 "$KIT/install.sh" claude --user --only nope >/dev/null 2>&1 && no "unknown plugin accepted" || ok "unknown plugin rejected"
 rm -rf "$h" "$r"
 
+python3 -B -m unittest discover -s "$KIT/tests" -p test_git_identity.py \
+  && ok "Git author and committer configuration" || no "Git identity tests failed"
+
 echo "10. feature-graph: graph.py"
 G="python3 -I $KIT/plugins/feature-graph/skills/feature-graph/scripts/graph.py"
 h=$(mktemp -d)

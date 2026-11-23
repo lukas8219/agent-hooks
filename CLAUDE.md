@@ -34,8 +34,19 @@ here would register every hook twice.
    git: it adds it to `.git/info/exclude` when the repo doesn't track it, and
    marks it `skip-worktree` when the repo does. Don't undo either, and never
    commit `.claude/settings.json` changes that point at `/opt/agent-hooks`.
+   When `AGENT_HOOKS_GIT_NAME` and `AGENT_HOOKS_GIT_EMAIL` are set, this also
+   configures the repo's Git author and committer and the four `GIT_AUTHOR_*`
+   / `GIT_COMMITTER_*` variables in Claude's settings. Never infer an identity
+   from the repository owner or its last commit.
 4. Confirm: `"$KIT/install.sh" status "$CLAUDE_PROJECT_DIR"` should list the
-   hooks of each installed plugin. Then check that they are live: use the Write tool to create
+   hooks of each installed plugin and the effective Git author and committer.
+   Run it in a new Bash tool call so updated settings can take effect. If
+   an identity was requested, verify both match it. If they do not, report
+   the mismatch and have the user set the four `GIT_AUTHOR_*` / `GIT_COMMITTER_*`
+   environment variables to their name and email in the web environment and
+   restart. If neither `AGENT_HOOKS_GIT_*` variable is set, report that Git
+   identity was not configured and name the two variables needed to opt in.
+   Then check that the hooks are live: use the Write tool to create
    `.agent-hooks-probe.rb` in the repo root with the content `# probe`. Use
    `.py` instead if only `coding-python` is installed, or `.cr` for
    `coding-crystal`. The

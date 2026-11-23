@@ -6,10 +6,12 @@
 #   ./install.sh claude --project <dir> [--only ...] <dir>/.claude/settings.json (cloud sessions)
 #   ./install.sh codex  --user          [--only ...] ${CODEX_HOME:-~/.codex}/hooks.json
 #   ./install.sh codex  --project <dir> [--only ...] <dir>/.codex/hooks.json
+#   ./install.sh git-identity --user|--project <dir> configure Git commit identity
 #   ./install.sh status [dir]                        show what is registered where
 #   ./install.sh list                                list the plugins
 #
 # --only takes a comma-separated list of plugins (see `list`); default is all.
+# AGENT_HOOKS_GIT_NAME and AGENT_HOOKS_GIT_EMAIL opt in to setting Git identity.
 #
 # Each plugins/<name>/hooks/hooks.json is the plugin's own hook file, used
 # as-is by /plugin (Claude Code) and /plugins (Codex). Here those files are
@@ -122,10 +124,36 @@ keep_out_of_git() {
   fi
 }
 
+configure_git_identity() {
+  local name=${AGENT_HOOKS_GIT_NAME:-} email=${AGENT_HOOKS_GIT_EMAIL:-} role
+  [ -n "$name$email" ] || return 0
+  [ -n "$name" ] && [ -n "$email" ] \
+    || die "set both AGENT_HOOKS_GIT_NAME and AGENT_HOOKS_GIT_EMAIL"
+  local args=(--global)
+  if [ "$SCOPE" = project ]; then
+    git -C "$DIR" rev-parse --git-dir >/dev/null 2>&1 || die "not a Git repository: $DIR"
+    args=(--local)
+    if [ "$(git -C "$DIR" config --bool --get extensions.worktreeConfig || true)" = true ]; then
+      args=(--worktree)
+    fi
+  fi
+  for role in user author committer; do
+    git -C "${DIR:-$KIT}" config "${args[@]}" --replace-all "$role.name" "$name"
+    git -C "${DIR:-$KIT}" config "${args[@]}" --replace-all "$role.email" "$email"
+  done
+  say "Git ${args[0]} commit identity: $name <$email>"
+}
+
 install_claude() {
   need_jq; parse_args "$@"
+  configure_git_identity
   local prefs
   prefs=$(cat "$KIT/config/claude-settings.json")
+  if [ -n "${AGENT_HOOKS_GIT_NAME:-}" ]; then
+    prefs=$(jq --arg name "$AGENT_HOOKS_GIT_NAME" --arg email "$AGENT_HOOKS_GIT_EMAIL" '
+      .env = {GIT_AUTHOR_NAME: $name, GIT_AUTHOR_EMAIL: $email,
+              GIT_COMMITTER_NAME: $name, GIT_COMMITTER_EMAIL: $email}' <<< "$prefs")
+  fi
   if [ "$SCOPE" = user ]; then
     merge_hooks "$HOME/.claude/settings.json" "$prefs"
     link_skills "$HOME/.claude/skills"
@@ -139,6 +167,7 @@ install_claude() {
 
 install_codex() {
   need_jq; parse_args "$@"
+  configure_git_identity
   if [ "$SCOPE" = user ]; then
     merge_hooks "${CODEX_HOME:-$HOME/.codex}/hooks.json"
     link_skills "${CODEX_HOME:-$HOME/.codex}/skills"
@@ -185,6 +214,13 @@ status() {
            | .hooks[] | select(.command | test("/runtime/hook\\.sh"))
            | "  \($e) \($m) -> \(.command | sub(".*/plugins/"; ""))"' "$f"
   done
+  if git -C "${1:-.}" rev-parse --git-dir >/dev/null 2>&1; then
+    echo "Git identity in ${1:-.} (includes environment overrides):"
+    printf '  author: '
+    git -C "${1:-.}" var GIT_AUTHOR_IDENT
+    printf '  committer: '
+    git -C "${1:-.}" var GIT_COMMITTER_IDENT
+  fi
 }
 
 list() {
@@ -199,7 +235,8 @@ case "$cmd" in
   deps)   install_deps ;;
   claude) install_claude "$@" ;;
   codex)  install_codex "$@" ;;
+  git-identity) parse_args "$@"; configure_git_identity ;;
   status) status "$@" ;;
   list)   list ;;
-  *) sed -n '2,13p' "$0"; exit 1 ;;
+  *) sed -n '2,15p' "$0"; exit 1 ;;
 esac

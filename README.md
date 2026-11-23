@@ -100,6 +100,56 @@ start, Claude follows those instructions and runs `install.sh claude --project
 <repo>`. That writes the hooks into the repo's own `.claude/settings.json` and
 keeps the file out of git.
 
+### Git commit identity
+
+To use your account for web commits, add both variables to the web
+environment's saved variables before rerunning setup and starting a new session:
+
+```sh
+AGENT_HOOKS_GIT_NAME="Your Name"
+AGENT_HOOKS_GIT_EMAIL="your-verified-email@example.com"
+```
+
+Use an email associated with your GitHub account, or your GitHub-provided
+`noreply` address. GitHub identifies commit authors by email, independently of
+the credentials used to push. The existing `attribution.commit: ""` setting
+only removes Claude's co-author trailer; it does not change Git's author or
+committer. See [Git's identity settings](https://git-scm.com/docs/git-config#Documentation/git-config.txt-username),
+[GitHub's commit email instructions](https://docs.github.com/en/account-and-profile/how-tos/email-preferences/setting-your-commit-email-address),
+and [Claude's attribution setting](https://code.claude.com/docs/en/settings-reference#attributioncommit).
+
+At session start, the installer applies the identity in each working
+repository, including explicit author
+and committer settings that could otherwise override `user.name` / `user.email`.
+It uses worktree config when enabled. The Claude installer also sets
+`GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, and
+`GIT_COMMITTER_EMAIL` in Claude settings so inherited defaults do not take
+precedence. Other environment settings are preserved. Verify from a fresh
+Bash tool call with `./install.sh status .`; it prints the effective author
+and committer. If the launcher still overrides them, set those four variables
+in the saved web environment too and restart the session.
+
+Saved environment variables are loaded after the web setup script runs. To
+also configure global Git identity during setup, export the two
+`AGENT_HOOKS_GIT_*` values in the setup script itself. Otherwise setup leaves
+global identity unchanged and the session installer configures each repo.
+
+The same opt-in works with `install.sh claude|codex --user|--project <repo>`.
+To configure only Git, including when using the plugin manager:
+
+```sh
+AGENT_HOOKS_GIT_NAME="Your Name" \
+AGENT_HOOKS_GIT_EMAIL="your-verified-email@example.com" \
+  ./install.sh git-identity --project /path/to/repo
+```
+
+Use `--user` for global Git config. Neither variable set leaves identity
+unchanged; supplying only one is an error. The Git-only and Codex installers
+do not alter the calling shell: any existing `GIT_AUTHOR_*` / `GIT_COMMITTER_*`
+exports must match your intended identity. Installation through a plugin
+manager alone does not run this setup. These settings affect future commits;
+existing commits and GitHub authentication are unchanged.
+
 ## Extending
 
 - **New check:** add `runtime/checks/<name>.sh`, which reads the neutral event
