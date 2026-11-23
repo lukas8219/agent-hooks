@@ -258,5 +258,10 @@ else
 fi
 rm -rf "$h"
 
+echo "11. AIP skill contracts"
+python3 "$KIT/scripts/validate-aip.py" && ok "AIP skills validate offline" || no "AIP validation failed (install tests/requirements.txt)"
+python3 -B -m unittest discover -s "$KIT/tests" -p test_aip.py \
+  && ok "AIP contracts and script behavior" || no "AIP contract tests failed"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

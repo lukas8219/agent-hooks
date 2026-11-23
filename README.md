@@ -111,6 +111,31 @@ Both skills belong to the `feature-graph` plugin and share
 client for the Neo4j Query API. The model and payload are in
 `plugins/feature-graph/skills/feature-graph/references/schema.md`.
 
+Both skills use [AIP v0.3a3](https://github.com/zach-blumenfeld/aip/tree/v0.3a3),
+the version evaluated in the [AIP paper](https://arxiv.org/html/2606.04781v1).
+Their `SKILL.md` bodies are YAML procedures with typed inputs/outputs, named steps,
+and explicit dependencies. Each bundles the unchanged upstream procedure schema
+and original instructions in `source/`. AIP describes these execution procedures;
+the repository feature graph's Neo4j data model is unchanged. Mapping confirmation
+precedes all graph writes, including index initialization. Verification uses a
+read-only command adapter and deterministic Git change collection.
+
+Validate the skills offline with:
+
+```sh
+python3 -m pip install -r tests/requirements.txt
+python3 scripts/validate-aip.py
+python3 -B -m unittest discover -s tests -p 'test_aip.py'
+```
+
+The test dependencies are only needed for development; the installed graph
+clients still use Python's standard library. `tests/run.sh` includes these AIP
+checks. They verify the pinned schema, dependencies, typed data flow, bundled
+paths, approval ordering, and read-only commands. The upstream AIP validator can
+also be run against either skill directory from a checkout of tag `v0.3a3`.
+This is conformance to that specification, not a claim of runtime-enforced graph
+traversal, certification, or improved task success without behavioral evaluation.
+
 | Env var | |
 |---|---|
 | `NEO4J_URI` | `neo4j+s://…` (Aura), `neo4j://host:7687` or `http(s)://host:port` |
