@@ -23,6 +23,7 @@ fi
 
 "$DEST/install.sh" deps
 "$DEST/install.sh" git-identity --user
+"$DEST/install.sh" git-signing --user
 
 mkdir -p "$HOME/.claude"
 marker="<!-- agent-hooks -->"

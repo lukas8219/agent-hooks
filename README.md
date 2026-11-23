@@ -150,6 +150,89 @@ exports must match your intended identity. Installation through a plugin
 manager alone does not run this setup. These settings affect future commits;
 existing commits and GitHub authentication are unchanged.
 
+### Remote Git commit signing
+
+The Claude and Codex installers can also configure the remote signing client.
+First run the signing bridge and Lima tunnel on your trusted Mac, and provision
+the bridge's executable `signing/git-sign.py` and your **public** Ed25519 key in
+the cloud environment. The bridge and its deployment remain in the separate
+private repository. This installer does not start the Mac, create a signing
+session, download the private repository, or export a private key.
+
+Set the following variables in the environment where the installer runs:
+
+```sh
+export AGENT_HOOKS_SIGN_URL="https://your-signing-tunnel.example.com"
+export AGENT_HOOKS_SIGN_PROGRAM="/opt/git-signing-bridge/signing/git-sign.py"
+export AGENT_HOOKS_SIGN_KEY_FILE="/run/git-signing/key.pub"
+export AGENT_HOOKS_SIGN_TOKEN_FILE="/run/secrets/git-signing-token"
+./install.sh claude --project "$PWD"
+```
+
+Use `codex` instead of `claude` for Codex, or `git-signing` to configure signing
+without registering hooks (including installations through a plugin manager).
+Use `--user` for global Git configuration. Project installation uses worktree
+configuration when enabled. Set the Git identity variables above to the name
+and email authorized by the bridge; signing setup does not infer an identity
+from the public key.
+
+The token file must already exist, be readable only by its owner (mode 600 or
+400), and live outside Git repositories. Provision its contents through a
+protected secret mechanism. Never put a token in the URL, command arguments,
+settings JSON, or chat. The installer validates an HTTPS origin, executable
+client, public key, and authorization configuration before changing Git or
+installing hooks. It does not contact the service or request a signature during
+installation.
+
+If an HTTP secret proxy injects `Authorization: Bearer <session-token>` for the
+exact signing hostname, use this instead of a local token file:
+
+```sh
+unset AGENT_HOOKS_SIGN_TOKEN_FILE
+export AGENT_HOOKS_SIGN_AUTH=proxy
+```
+
+Proxy configuration and the network allowlist must be provisioned separately.
+The installer cannot verify that the proxy injects the header. To switch back
+to a token file, unset `AGENT_HOOKS_SIGN_AUTH` (or set it to `token-file`) and
+provide `AGENT_HOOKS_SIGN_TOKEN_FILE` again.
+
+All three of `URL`, `PROGRAM`, and `KEY_FILE` are required when opting in, plus
+either a token file or explicit proxy mode. With no signing variables set,
+installation leaves existing signing settings unchanged, including previously
+enabled remote signing. Partial or invalid settings fail installation.
+
+The installer enables `commit.gpgsign`, selects SSH signing, and points Git at
+this kit's adapter. It persists the URL, client/public-key paths, authorization
+mode, and token **path** in Git config; it never reads or saves the token's
+contents. Keep both checkouts and the configured files at their installed
+paths. Later commits use the saved configuration even if setup variables are
+absent or stale. Ordinary local signature verification still uses `ssh-keygen`.
+`./install.sh status .` reports signing configuration without contacting the
+bridge; an actual signed commit is needed to verify connectivity and access.
+
+When the bridge is unavailable, access expires, or the token file disappears,
+signing fails and Git aborts the commit. The error tells the agent to ask the
+user to renew authorization on the trusted Mac. The adapter does not renew its
+own authorization or silently retry unsigned. It does not prevent an explicit
+`--no-gpg-sign` or a Git configuration change; agents must not use those to
+bypass a requested signature.
+
+For renewal, create a fresh bridge session and replace the protected token
+file or proxy secret. Replacing a token at the same path needs no reinstall.
+If the tunnel hostname, public key, client path, or token path changed, rerun
+the installer with the complete updated variables. Quick Tunnel hostnames can
+change on restart. Keep the Mac, 1Password, bridge, and tunnel available while
+the cloud agent signs commits.
+
+For Claude Code web setup, provide these variables at session startup alongside
+the identity variables; the existing session instructions run the installer in
+each work repo. `web/setup.sh` also applies global signing if the variables and
+files are already present during setup. For a Codex cloud environment, run the
+`codex --project` or `git-signing --project` installation step after provisioning
+the client, public key, and authorization. Harness-specific proxy delivery and
+network policy still need testing inside the actual cloud environment.
+
 ## Extending
 
 - **New check:** add `runtime/checks/<name>.sh`, which reads the neutral event

@@ -180,6 +180,8 @@ rm -rf "$h" "$r"
 
 python3 -B -m unittest discover -s "$KIT/tests" -p test_git_identity.py \
   && ok "Git author and committer configuration" || no "Git identity tests failed"
+python3 -B -m unittest discover -s "$KIT/tests" -p test_git_signing.py \
+  && ok "Remote Git signing installation and renewal" || no "Git signing tests failed"
 
 echo "10. feature-graph: graph.py"
 G="python3 -I $KIT/plugins/feature-graph/skills/feature-graph/scripts/graph.py"
