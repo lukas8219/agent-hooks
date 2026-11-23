@@ -155,5 +155,62 @@ check "codex hooks registered" "$(count "$h/.codex/hooks.json" runtime/hook.sh)"
 "$KIT/install.sh" claude --user --only nope >/dev/null 2>&1 && no "unknown plugin accepted" || ok "unknown plugin rejected"
 rm -rf "$h" "$r"
 
+echo "10. feature-graph: graph.py"
+G="python3 -I $KIT/plugins/skills/skills/feature-graph/scripts/graph.py"
+h=$(mktemp -d)
+HOME=$h "$KIT/install.sh" claude --user --only skills >/dev/null
+for s in feature-graph verify-changed; do
+  [ -f "$h/.claude/skills/$s/SKILL.md" ] && ok "skill $s is linked" || no "skill $s not linked"
+done
+[ -f "$h/.claude/skills/verify-changed/../feature-graph/scripts/graph.py" ] && ok "verify-changed reaches graph.py" || no "verify-changed cannot reach graph.py"
+check "neo4j+s:// -> https" "$($G uri neo4j+s://abc.databases.neo4j.io | jq -r .base)" "https://abc.databases.neo4j.io"
+check "neo4j:// -> http :7474" "$($G uri neo4j://localhost:7687 | jq -r .base)" "http://localhost:7474"
+check "http passes through" "$($G uri http://db:17474/ | jq -r .base)" "http://db:17474"
+err=$(env -u NEO4J_URI $G ping 2>&1); rc=$?
+check "missing NEO4J_URI exits 1" "$rc" 1
+printf '%s' "$err" | grep -q 'NEO4J_URI is not set' && ok "missing env is named" || no "unclear error: $err"
+fx=$h/fx; mkdir -p "$fx"
+cat > "$fx/provider.json" <<'JSON'
+{"repo":{"name":"test-fg/provider","sha":"aaaaaaaa"},
+ "features":[{"slug":"things-api","name":"Things API","kind":"api",
+   "files":[{"path":"app/things.rb","role":"entry"},{"path":"spec/things_spec.rb","role":"test"}],
+   "checks":[{"slug":"things-spec","kind":"test","command":"bundle exec rspec spec/things_spec.rb","paths":["spec/things_spec.rb"]}]}],
+ "interfaces":[{"kind":"http","key":"POST /api/__fg_test/things","direction":"exposes","files":["app/things.rb"]}]}
+JSON
+cat > "$fx/consumer.json" <<'JSON'
+{"repo":{"name":"test-fg/consumer","sha":"bbbbbbbb"},
+ "features":[{"slug":"make-thing","name":"Make thing","kind":"ui",
+   "files":[{"path":"app/make.rb","role":"entry"},{"path":"lib/client.rb","role":"core"}],
+   "checks":[{"slug":"make-thing-manual","kind":"manual","description":"Make a thing"}]}],
+ "interfaces":[{"kind":"http","key":"POST /api/__fg_test/things","direction":"consumes","files":["lib/client.rb"]}],
+ "requires":[{"repo":"test-fg/provider","reason":"calls the things API","source":"declared"}]}
+JSON
+check "valid payload passes" "$($G validate --json "$fx/consumer.json" | jq -r .ok)" true
+jq '.features[0].files[0].role="bogus" | .interfaces[0].key="things"' "$fx/consumer.json" > "$fx/bad.json"
+bad=$($G validate --json "$fx/bad.json" 2>&1)
+printf '%s' "$bad" | grep -q 'role must be' && printf '%s' "$bad" | grep -q "key must look like" && ok "invalid payload is explained" || no "validate missed problems: $bad"
+check "dry-run prints statements offline" "$(env -u NEO4J_URI $G upsert --dry-run --json "$fx/consumer.json" | jq 'length > 5')" true
+if [ -z "${NEO4J_URI:-}" ]; then
+  skip "Neo4j round trip (set NEO4J_URI/NEO4J_USERNAME/NEO4J_PASSWORD)"
+else
+  cleanup="MATCH (n) WHERE n.repo STARTS WITH 'test-fg/' OR n.name STARTS WITH 'test-fg/' OR n.id STARTS WITH 'http:POST /api/__fg_test' DETACH DELETE n"
+  $G write "$cleanup" >/dev/null
+  $G init >/dev/null && ok "init" || no "init failed"
+  $G upsert --json "$fx/provider.json" >/dev/null && ok "upsert provider" || no "upsert provider failed"
+  check "consumer links to provider" "$($G upsert --json "$fx/consumer.json" | jq -r '.linked_interfaces[0].other_repo')" test-fg/provider
+  imp=$($G impact --repo test-fg/consumer lib/client.rb nope.rb)
+  check "impact finds the feature" "$(printf '%s' "$imp" | jq -r '.features[0].id')" test-fg/consumer:make-thing
+  check "impact crosses repos" "$(printf '%s' "$imp" | jq -r '.interfaces[0].counterparts[0].features[0].id')" test-fg/provider:things-api
+  check "impact includes the provider's check" "$(printf '%s' "$imp" | jq -r '[.checks[].id] | index("test-fg/provider:things-spec") != null')" true
+  check "impact lists unmapped files" "$(printf '%s' "$imp" | jq -c .unmapped_files)" '["nope.rb"]'
+  check "impact lists required repos" "$(printf '%s' "$imp" | jq -r '.requires.outgoing[0].repo')" test-fg/provider
+  $G read "CREATE (:FgJunk {repo: 'test-fg/x'})" >/dev/null 2>&1 && no "read allowed a write" || ok "read refuses writes"
+  check "refused write left nothing" "$($G read "MATCH (n:FgJunk) RETURN count(n) AS c" | jq '.[0].c')" 0
+  $G upsert --json "$fx/consumer.json" >/dev/null
+  check "rerun is idempotent" "$($G status --repo test-fg/consumer | jq -c '[.features, .files, .interfaces]')" '[1,2,1]'
+  $G write "$cleanup" >/dev/null
+fi
+rm -rf "$h"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

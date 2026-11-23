@@ -10,7 +10,7 @@ on a neutral event and never sees the harness's own payload.
 | | before `git commit` | Denies the commit when the lines it adds have offenses. Catches `git add -A && git commit` and `commit -a`. `--no-verify` bypasses. |
 | | before an edit / after a shell command | No new comments in Ruby, found by Ripper rather than a regex. |
 | `coding-python` | before an edit / after a shell command | No new comments in Python, found by `tokenize`. |
-| `skills` | | Shared skills (`plugins/skills/skills/<name>/SKILL.md`). |
+| `skills` | | Shared skills (`plugins/skills/skills/<name>/SKILL.md`), including `/feature-graph` and `/verify-changed` (below). |
 
 ## Layout
 
@@ -83,6 +83,32 @@ keeps the file out of git.
   add a `plugins/coding-<language>/` that passes `--lang <language>`.
 - **New harness:** teach `normalize` in `runtime/hook.sh` its tool names. If
   its response JSON differs, add a renderer beside `runtime/lib/render.sh`.
+
+## Feature graph skills
+
+`/feature-graph` maps the repo it runs in into a Neo4j knowledge graph:
+features, the files they touch, how to verify them, and the interfaces (HTTP
+routes, AMQP exchanges, shared tables, gems) the repo exposes or consumes. Run
+it once in each repo. Repos link up through shared interfaces: a route that
+account-console exposes and customer-console calls becomes one `Interface`
+node with an edge from each side. `/verify-changed` reads that graph for the
+branch's diff, prints a verification plan that includes other repos to test
+or change, and runs the local tests. It never writes to the graph.
+
+Both skills call `plugins/skills/skills/feature-graph/scripts/graph.py`, a
+stdlib-only client for the Neo4j Query API. The model and payload are in
+`feature-graph/references/schema.md`.
+
+| Env var | |
+|---|---|
+| `NEO4J_URI` | `neo4j+s://…` (Aura), `neo4j://host:7687` or `http(s)://host:port` |
+| `NEO4J_USERNAME`, `NEO4J_PASSWORD` | used by `/feature-graph` |
+| `NEO4J_READ_USERNAME`, `NEO4J_READ_PASSWORD` | optional read-only user for `/verify-changed` |
+| `NEO4J_DATABASE` | default `neo4j` |
+
+In Claude Code on the web, set these in the environment's variables. With
+`NEO4J_URI` set, `tests/run.sh` also runs a round trip against the database
+(it creates and then deletes `test-fg/*` nodes).
 
 ## Notes
 
