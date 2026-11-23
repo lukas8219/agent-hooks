@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The one hook entry point, for every harness:
 #
-#   hook.sh <check> [--lang ruby,python]
+#   hook.sh <check> [--lang ruby,python,crystal]
 #
 # Turns the harness's hook payload into the neutral event of lib/common.sh,
 # runs checks/<check>.sh on it, and prints the hook response. --lang limits the
@@ -18,7 +18,7 @@ set -uo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$here/lib/render.sh"
 
-check=${1:?usage: hook.sh <check> [--lang ruby,python]}
+check=${1:?usage: hook.sh <check> [--lang ruby,python,crystal]}
 shift
 [ "${1:-}" = --lang ] && export AGENT_HOOKS_LANGS=${2:-}
 

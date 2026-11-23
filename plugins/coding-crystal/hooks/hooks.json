@@ -1,0 +1,52 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/runtime/hook.sh\" no-new-comments --lang crystal",
+            "timeout": 30,
+            "statusMessage": "Checking for new comments"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/runtime/hook.sh\" lint-changed --lang crystal",
+            "timeout": 60,
+            "statusMessage": "Linting the lines this commit adds"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/runtime/hook.sh\" lint-changed --lang crystal",
+            "timeout": 60,
+            "statusMessage": "Linting changed lines"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/runtime/hook.sh\" no-new-comments --lang crystal",
+            "timeout": 30,
+            "statusMessage": "Checking for new comments"
+          }
+        ]
+      }
+    ]
+  }
+}

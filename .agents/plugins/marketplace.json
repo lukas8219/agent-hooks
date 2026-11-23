@@ -17,6 +17,18 @@
       "category": "Productivity"
     },
     {
+      "name": "coding-crystal",
+      "source": {
+        "source": "local",
+        "path": "./plugins/coding-crystal"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
       "name": "coding-python",
       "source": {
         "source": "local",

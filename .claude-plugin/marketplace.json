@@ -10,6 +10,11 @@
       "description": "Ruby guards: RuboCop on changed lines, a RuboCop gate on git commit, and no new comments"
     },
     {
+      "name": "coding-crystal",
+      "source": "./plugins/coding-crystal",
+      "description": "Crystal guards: Ameba on changed lines, an Ameba gate on git commit, and no new comments"
+    },
+    {
       "name": "coding-python",
       "source": "./plugins/coding-python",
       "description": "Python guards: no new comments (tokenize-based)"

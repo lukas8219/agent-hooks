@@ -1,0 +1,9 @@
+{
+  "name": "coding-crystal",
+  "version": "5.0.0",
+  "description": "Crystal guards: Ameba on changed lines, an Ameba gate on git commit, and no new comments",
+  "author": {
+    "name": "Lucas Polesello"
+  },
+  "repository": "https://github.com/lukas8219/agent-hooks"
+}
