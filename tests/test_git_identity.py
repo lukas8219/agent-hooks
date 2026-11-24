@@ -21,7 +21,7 @@ class GitIdentityTests(unittest.TestCase):
         self.repo = self.root / "repo with spaces"
         self.env = {
             key: value for key, value in os.environ.items()
-            if not key.startswith(("GIT_", "AGENT_HOOKS_GIT_"))
+            if not key.startswith(("GIT_", "AGENT_HOOKS_GIT_", "AGENT_HOOKS_SIGN_"))
             and key not in {"CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME"}
         }
         self.env.update(

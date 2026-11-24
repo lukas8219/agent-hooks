@@ -5,6 +5,12 @@
   },
   "plugins": [
     {
+      "name": "git-account",
+      "source": {"source": "local", "path": "./plugins/git-account"},
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+      "category": "Productivity"
+    },
+    {
       "name": "coding-ruby",
       "source": {
         "source": "local",

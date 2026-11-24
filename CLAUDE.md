@@ -1,4 +1,10 @@
-# agent-hooks: install the hooks before you start work
+# agent-hooks: prefer installed plugins
+
+The preferred setup enables the `git-account` plugin and the selected coding
+plugins. Its `SessionStart` hook configures Git identity and optional signing
+automatically. Do not run the manual installer when using installed plugins.
+The instructions below apply only when the user explicitly chose the alternative
+installer route by setting `AGENT_HOOKS_INSTALL_MODE=manual`.
 
 This file sets up the agent-hooks plugins: `coding-ruby` (RuboCop on the lines
 you change, a RuboCop gate on `git commit`, no new comments), `coding-python`
@@ -11,7 +17,8 @@ read either from the kit's own repo or from `~/.claude/CLAUDE.md`, where
 ## When to act
 
 Do this once, at the start of the session, **before any other work**, when
-`CLAUDE_CODE_REMOTE` is `true` (Claude Code on the web). Check with
+`CLAUDE_CODE_REMOTE` is `true` and `AGENT_HOOKS_INSTALL_MODE` is `manual`
+(the alternative Claude Code web installer route). Check with
 `echo "$CLAUDE_CODE_REMOTE"`. On a local machine, do nothing: there the kit is
 installed with `/plugin` or with `install.sh claude --user`, and running it again
 here would register every hook twice.
@@ -38,6 +45,11 @@ here would register every hook twice.
    configures the repo's Git author and committer and the four `GIT_AUTHOR_*`
    / `GIT_COMMITTER_*` variables in Claude's settings. Never infer an identity
    from the repository owner or its last commit.
+   When the `AGENT_HOOKS_SIGN_*` variables are supplied, this also configures
+   remote commit signing. It needs the provisioned bridge client, public key,
+   HTTPS origin, and a protected token file or explicit proxy authorization.
+   See `README.md` for the complete variables. Do not print tokens or put them
+   in settings, command arguments, or commits.
 4. Confirm: `"$KIT/install.sh" status "$CLAUDE_PROJECT_DIR"` should list the
    hooks of each installed plugin and the effective Git author and committer.
    Run it in a new Bash tool call so updated settings can take effect. If
@@ -46,6 +58,9 @@ here would register every hook twice.
    environment variables to their name and email in the web environment and
    restart. If neither `AGENT_HOOKS_GIT_*` variable is set, report that Git
    identity was not configured and name the two variables needed to opt in.
+   If signing was requested, confirm that status reports it enabled with the
+   remote bridge. Status checks configuration only; it does not prove the
+   service is reachable or authorization is still valid.
    Then check that the hooks are live: use the Write tool to create
    `.agent-hooks-probe.rb` in the repo root with the content `# probe`. Use
    `.py` instead if only `coding-python` is installed, or `.cr` for
@@ -56,7 +71,12 @@ here would register every hook twice.
 5. Give the user one line: the hooks are installed, and for which repos.
 
 If a step fails, report the error and carry on with the user's task. A missing
-hook must never block the work.
+hook must never block the work. If requested signing could not be configured,
+continue other work but do not commit until signing is configured. If a commit
+fails because authorization expired, ask the user to create a new session on
+their trusted host and update the protected token or proxy secret. Rerun setup
+when the hostname or paths change. Never disable signing, use `--no-gpg-sign`,
+export the private key, or silently retry unsigned to work around a failure.
 
 ## What the hooks will do to you
 

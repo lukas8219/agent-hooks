@@ -5,6 +5,11 @@
   },
   "plugins": [
     {
+      "name": "git-account",
+      "source": "./plugins/git-account",
+      "description": "Configure your Git identity and optional remote commit signing at session startup"
+    },
+    {
       "name": "coding-ruby",
       "source": "./plugins/coding-ruby",
       "description": "Ruby guards: RuboCop on changed lines, a RuboCop gate on git commit, and no new comments"

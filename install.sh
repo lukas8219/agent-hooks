@@ -7,6 +7,7 @@
 #   ./install.sh codex  --user          [--only ...] ${CODEX_HOME:-~/.codex}/hooks.json
 #   ./install.sh codex  --project <dir> [--only ...] <dir>/.codex/hooks.json
 #   ./install.sh git-identity --user|--project <dir> configure Git commit identity
+#   ./install.sh git-signing  --user|--project <dir> configure remote Git signing
 #   ./install.sh status [dir]                        show what is registered where
 #   ./install.sh list                                list the plugins
 #
@@ -70,7 +71,7 @@ merge_hooks() {
   ours=$(selected_hooks)
   tmp=$(mktemp)
   jq --argjson ours "$ours" --argjson extra "$extra" '
-    def mine: (.command? // "") | test("/runtime/hook\\.sh|/adapters/(claude-code|codex)\\.sh");
+    def mine: (.command? // "") | test("/runtime/hook\\.sh|/adapters/(claude-code|codex)\\.sh|/plugins/git-account/scripts/session-start\\.py");
     . * $extra
     | .hooks //= {}
     | .hooks |= with_entries(.value |= [ .[] | .hooks |= map(select(mine | not)) | select(.hooks | length > 0) ])
@@ -144,9 +145,29 @@ configure_git_identity() {
   say "Git ${args[0]} commit identity: $name <$email>"
 }
 
+validate_git_signing() {
+  [ -n "${AGENT_HOOKS_SIGN_URL:-}${AGENT_HOOKS_SIGN_PROGRAM:-}${AGENT_HOOKS_SIGN_KEY_FILE:-}${AGENT_HOOKS_SIGN_TOKEN_FILE:-}${AGENT_HOOKS_SIGN_AUTH:-}" ] || return 0
+  python3 "$KIT/scripts/git-signing.py" validate
+}
+
+configure_git_signing() {
+  [ -n "${AGENT_HOOKS_SIGN_URL:-}${AGENT_HOOKS_SIGN_PROGRAM:-}${AGENT_HOOKS_SIGN_KEY_FILE:-}${AGENT_HOOKS_SIGN_TOKEN_FILE:-}${AGENT_HOOKS_SIGN_AUTH:-}" ] || return 0
+  local scope=global
+  if [ "$SCOPE" = project ]; then
+    git -C "$DIR" rev-parse --git-dir >/dev/null 2>&1 || die "not a Git repository: $DIR"
+    scope=local
+    if [ "$(git -C "$DIR" config --bool --get extensions.worktreeConfig || true)" = true ]; then
+      scope=worktree
+    fi
+  fi
+  python3 "$KIT/scripts/git-signing.py" configure --scope "$scope" --directory "${DIR:-$KIT}"
+}
+
 install_claude() {
   need_jq; parse_args "$@"
+  validate_git_signing
   configure_git_identity
+  configure_git_signing
   local prefs
   prefs=$(cat "$KIT/config/claude-settings.json")
   if [ -n "${AGENT_HOOKS_GIT_NAME:-}" ]; then
@@ -167,7 +188,9 @@ install_claude() {
 
 install_codex() {
   need_jq; parse_args "$@"
+  validate_git_signing
   configure_git_identity
+  configure_git_signing
   if [ "$SCOPE" = user ]; then
     merge_hooks "${CODEX_HOME:-$HOME/.codex}/hooks.json"
     link_skills "${CODEX_HOME:-$HOME/.codex}/skills"
@@ -210,8 +233,8 @@ status() {
   for f in "$HOME/.claude/settings.json" "${CODEX_HOME:-$HOME/.codex}/hooks.json" "${1:-.}/.claude/settings.json" "${1:-.}/.codex/hooks.json"; do
     [ -r "$f" ] || continue
     echo "$f"
-    jq -r '.hooks // {} | to_entries[] | .key as $e | .value[] | .matcher as $m
-           | .hooks[] | select(.command | test("/runtime/hook\\.sh"))
+    jq -r '.hooks // {} | to_entries[] | .key as $e | .value[] | (.matcher // "*") as $m
+           | .hooks[] | select(.command | test("/runtime/hook\\.sh|/plugins/git-account/scripts/session-start\\.py"))
            | "  \($e) \($m) -> \(.command | sub(".*/plugins/"; ""))"' "$f"
   done
   if git -C "${1:-.}" rev-parse --git-dir >/dev/null 2>&1; then
@@ -220,6 +243,7 @@ status() {
     git -C "${1:-.}" var GIT_AUTHOR_IDENT
     printf '  committer: '
     git -C "${1:-.}" var GIT_COMMITTER_IDENT
+    python3 "$KIT/scripts/git-signing.py" status --directory "${1:-.}"
   fi
 }
 
@@ -236,6 +260,7 @@ case "$cmd" in
   claude) install_claude "$@" ;;
   codex)  install_codex "$@" ;;
   git-identity) parse_args "$@"; configure_git_identity ;;
+  git-signing) parse_args "$@"; configure_git_signing ;;
   status) status "$@" ;;
   list)   list ;;
   *) sed -n '2,15p' "$0"; exit 1 ;;
