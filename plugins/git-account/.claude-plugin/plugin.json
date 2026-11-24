@@ -1,0 +1,7 @@
+{
+  "name": "git-account",
+  "version": "1.0.0",
+  "description": "Configure your Git identity and optional remote commit signing at session startup",
+  "author": {"name": "Lucas Polesello"},
+  "repository": "https://github.com/lukas8219/agent-hooks"
+}

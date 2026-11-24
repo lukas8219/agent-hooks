@@ -125,8 +125,10 @@ for p in "$KIT"/plugins/*/; do
   jq -e .name "$p/.claude-plugin/plugin.json" >/dev/null 2>&1 && jq -e .name "$p/plugin.json" >/dev/null 2>&1 \
     && ok "$n: both manifests parse" || no "$n: manifest missing or invalid"
   [ -f "$p/hooks/hooks.json" ] || continue
-  [ ! -L "$p/runtime" ] && diff -r "$KIT/runtime" "$p/runtime" >/dev/null 2>&1 \
-    && ok "$n: runtime copy matches runtime/" || no "$n: runtime stale or a symlink (scripts/sync-runtime.sh)"
+  if grep -qF '/runtime/hook.sh' "$p/hooks/hooks.json"; then
+    [ ! -L "$p/runtime" ] && diff -r "$KIT/runtime" "$p/runtime" >/dev/null 2>&1 \
+      && ok "$n: runtime copy matches runtime/" || no "$n: runtime stale or a symlink (scripts/sync-runtime.sh)"
+  fi
   bad=$(jq -r '.hooks[][] .hooks[].command' "$p/hooks/hooks.json" | sed 's/"//g; s/ .*//; s|\${CLAUDE_PLUGIN_ROOT}|'"${p%/}"'|' | while read -r c; do [ -x "$c" ] || echo "$c"; done)
   [ -z "$bad" ] && ok "$n: every hook command resolves" || no "$n: unresolved $bad"
 done
@@ -158,10 +160,12 @@ h=$(mktemp -d); r=$(new_repo)
 count() { jq "[.hooks // {} | .[][] .hooks[] | select(.command|test(\"$2\"))] | length" "$1"; }
 HOME=$h "$KIT/install.sh" claude --user >/dev/null && HOME=$h "$KIT/install.sh" claude --user >/dev/null
 check "claude --user: all plugins, idempotent" "$(count "$h/.claude/settings.json" runtime/hook.sh)" 10
+check "git-account: SessionStart registered once" "$(count "$h/.claude/settings.json" scripts/session-start.py)" 1
 check "attribution cleared" "$(jq -c .attribution "$h/.claude/settings.json")" '{"commit":"","pr":""}'
 HOME=$h "$KIT/install.sh" claude --user --only coding-python >/dev/null
 check "--only narrows and drops the rest" "$(count "$h/.claude/settings.json" runtime/hook.sh)" 2
 check "--only keeps only python hooks" "$(count "$h/.claude/settings.json" 'coding-python/')" 2
+check "--only removes git-account startup hook" "$(count "$h/.claude/settings.json" scripts/session-start.py)" 0
 echo '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"mine.sh"}]}]}}' > "$h/.claude/settings.json"
 HOME=$h "$KIT/install.sh" claude --user --only coding-ruby >/dev/null
 check "foreign hooks are kept" "$(count "$h/.claude/settings.json" mine.sh)" 1
@@ -182,6 +186,8 @@ python3 -B -m unittest discover -s "$KIT/tests" -p test_git_identity.py \
   && ok "Git author and committer configuration" || no "Git identity tests failed"
 python3 -B -m unittest discover -s "$KIT/tests" -p test_git_signing.py \
   && ok "Remote Git signing installation and renewal" || no "Git signing tests failed"
+python3 -B -m unittest discover -s "$KIT/tests" -p test_git_account.py \
+  && ok "Cached Git account plugin startup and recovery" || no "Git account plugin tests failed"
 
 echo "10. feature-graph: graph.py"
 G="python3 -I $KIT/plugins/feature-graph/skills/feature-graph/scripts/graph.py"

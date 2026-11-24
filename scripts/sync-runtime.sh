@@ -7,6 +7,7 @@ set -euo pipefail
 KIT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 for p in "$KIT"/plugins/*/; do
   [ -f "$p/hooks/hooks.json" ] || continue
+  grep -qF '/runtime/hook.sh' "$p/hooks/hooks.json" || continue
   rm -rf "$p/runtime"
   cp -R "$KIT/runtime" "$p/runtime"
   echo "synced $(basename "$p")/runtime"

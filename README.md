@@ -6,6 +6,7 @@ on a neutral event and never sees the harness's own payload.
 
 | Plugin | Hook | What it does |
 |---|---|---|
+| `git-account` | session start/resume | Configures your Git identity and optional remote signing from saved environment variables. |
 | `coding-ruby` | after an edit | RuboCop on the changed lines only. Advisory. |
 | | before `git commit` | Denies the commit when the lines it adds have offenses. Catches `git add -A && git commit` and `commit -a`. `--no-verify` bypasses. |
 | | before an edit / after a shell command | No new comments in Ruby, found by Ripper rather than a regex. |
@@ -32,14 +33,16 @@ plugins/<name>/
 .agents/plugins/marketplace.json  Codex marketplace
 install.sh                   hooks without a plugin manager (and the web setup)
 web/setup.sh                 setup script for Claude Code on the web
-CLAUDE.md                    tells a Claude Code web session to install the hooks
+CLAUDE.md                    instructions for the alternative manual cloud installer
 tests/run.sh                 end-to-end tests
 ```
 
-Each hook plugin carries its own copy of `runtime/`, because both harnesses copy
+Each coding hook plugin carries its own copy of `runtime/`, because both harnesses copy
 only the plugin directory into their cache, and Codex drops symlinks on the
 way. Edit `runtime/` and run `scripts/sync-runtime.sh`. `tests/run.sh` fails
 while any copy is stale.
+`git-account` instead carries its own setup and signing adapter in `scripts/`;
+it works from an isolated plugin cache without the top-level installer.
 
 ## Install
 
@@ -64,6 +67,7 @@ tree are skipped, as with the Ruby hooks.
 
 ```sh
 /plugin marketplace add lukas8219/agent-hooks
+/plugin install git-account@agent-hooks
 /plugin install coding-ruby@agent-hooks     # and/or coding-python
 /plugin install coding-crystal@agent-hooks
 /plugin install feature-graph@agent-hooks
@@ -73,6 +77,7 @@ tree are skipped, as with the Ruby hooks.
 
 ```sh
 codex plugin marketplace add lukas8219/agent-hooks
+codex plugin add git-account@agent-hooks
 codex plugin add coding-ruby@agent-hooks    # or pick in /plugins
 codex plugin add coding-crystal@agent-hooks
 codex plugin add feature-graph@agent-hooks
@@ -92,18 +97,29 @@ plugin manager or the script, not both, or every hook runs twice.
 `./install.sh list` shows the plugins, and `./install.sh status [repo]` shows
 what is registered where.
 
-**Claude Code on the web:** cloud sessions don't read
-`~/.claude/settings.json` or user plugins. Paste `web/setup.sh` into the
-environment's setup script. It clones the kit to `/opt/agent-hooks`, installs
-the dependencies, and appends `CLAUDE.md` to `~/.claude/CLAUDE.md`. At session
-start, Claude follows those instructions and runs `install.sh claude --project
-<repo>`. That writes the hooks into the repo's own `.claude/settings.json` and
-keeps the file out of git.
+**Claude Code on the web (preferred):** add this marketplace at
+[claude.ai/customize/plugins](https://claude.ai/customize/plugins), enable
+`git-account` and any coding plugins you want, then start a new session.
+Plugins installed only on your local computer do not automatically apply to
+cloud sessions. See [Claude's cloud plugin installation](https://code.claude.com/docs/en/plugins/install#install-a-plugin).
+Save the identity and signing variables below in the cloud environment. The
+plugin's `SessionStart` hook applies them without asking the agent to run an
+installer. `web/setup.sh` now only provisions dependencies by default. The
+private bridge client and public key still need to be provisioned separately.
+
+For the alternative manual route, set `AGENT_HOOKS_INSTALL_MODE=manual` in both
+`web/setup.sh` and the environment's saved variables. Setup then appends the
+manual `CLAUDE.md` instructions and configures Git when variables are available.
+Those instructions install hooks into each work repo's `.claude/settings.json`
+and keep it out of Git. Use one route per plugin to avoid duplicate hooks.
+When switching from the previous generated setup script, replace it with
+dependency/client provisioning only and start a fresh cloud session; do not
+retain the old `agent-hooks-signing-bootstrap` instructions to run the installer.
 
 ### Git commit identity
 
 To use your account for web commits, add both variables to the web
-environment's saved variables before rerunning setup and starting a new session:
+environment's saved variables before starting a new session:
 
 ```sh
 AGENT_HOOKS_GIT_NAME="Your Name"
@@ -118,10 +134,20 @@ committer. See [Git's identity settings](https://git-scm.com/docs/git-config#Doc
 [GitHub's commit email instructions](https://docs.github.com/en/account-and-profile/how-tos/email-preferences/setting-your-commit-email-address),
 and [Claude's attribution setting](https://code.claude.com/docs/en/settings-reference#attributioncommit).
 
-At session start, the installer applies the identity in each working
+The `git-account` startup hook applies identity in the session's working
 repository, including explicit author
 and committer settings that could otherwise override `user.name` / `user.email`.
-It uses worktree config when enabled. The Claude installer also sets
+It uses worktree config when enabled and leaves global Git config unchanged.
+In Claude, it appends safely quoted
+`GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, and
+`GIT_COMMITTER_EMAIL` exports to `CLAUDE_ENV_FILE`, preserving existing content.
+This overrides inherited defaults in subsequent Bash calls without editing
+the project's Claude settings. See [SessionStart environment persistence](https://code.claude.com/docs/en/hooks#persist-environment-variables).
+If the harness does not provide an environment file, inherited `GIT_AUTHOR_*`
+and `GIT_COMMITTER_*` values must match; the hook reports conflicts. For other
+repositories opened later in the session, run the Git-only installer in each.
+
+The alternative Claude installer sets
 `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, and
 `GIT_COMMITTER_EMAIL` in Claude settings so inherited defaults do not take
 precedence. Other environment settings are preserved. Verify from a fresh
@@ -129,10 +155,10 @@ Bash tool call with `./install.sh status .`; it prints the effective author
 and committer. If the launcher still overrides them, set those four variables
 in the saved web environment too and restart the session.
 
-Saved environment variables are loaded after the web setup script runs. To
-also configure global Git identity during setup, export the two
+Saved environment variables are loaded after the web setup script runs. In
+manual mode, to also configure global Git identity during setup, export the two
 `AGENT_HOOKS_GIT_*` values in the setup script itself. Otherwise setup leaves
-global identity unchanged and the session installer configures each repo.
+global identity unchanged. The plugin configures the session repository at startup.
 
 The same opt-in works with `install.sh claude|codex --user|--project <repo>`.
 To configure only Git, including when using the plugin manager:
@@ -146,31 +172,40 @@ AGENT_HOOKS_GIT_EMAIL="your-verified-email@example.com" \
 Use `--user` for global Git config. Neither variable set leaves identity
 unchanged; supplying only one is an error. The Git-only and Codex installers
 do not alter the calling shell: any existing `GIT_AUTHOR_*` / `GIT_COMMITTER_*`
-exports must match your intended identity. Installation through a plugin
-manager alone does not run this setup. These settings affect future commits;
+exports must match your intended identity. The `git-account` plugin runs setup
+on `SessionStart`; the other plugins do not configure Git. These settings affect future commits;
 existing commits and GitHub authentication are unchanged.
 
 ### Remote Git commit signing
 
-The Claude and Codex installers can also configure the remote signing client.
+The `git-account` plugin configures the remote signing client on `SessionStart`,
+including resumed sessions. It uses the same settings as the alternative
+Claude and Codex installers.
 First run the signing bridge and Lima tunnel on your trusted Mac, and provision
 the bridge's executable `signing/git-sign.py` and your **public** Ed25519 key in
 the cloud environment. The bridge and its deployment remain in the separate
-private repository. This installer does not start the Mac, create a signing
+private repository. The plugin does not start the Mac, create a signing
 session, download the private repository, or export a private key.
 
-Set the following variables in the environment where the installer runs:
+Set the following variables in the saved cloud environment. For a local
+session, export them before starting the agent:
 
-```sh
-export AGENT_HOOKS_SIGN_URL="https://your-signing-tunnel.example.com"
-export AGENT_HOOKS_SIGN_PROGRAM="/opt/git-signing-bridge/signing/git-sign.py"
-export AGENT_HOOKS_SIGN_KEY_FILE="/run/git-signing/key.pub"
-export AGENT_HOOKS_SIGN_TOKEN_FILE="/run/secrets/git-signing-token"
-./install.sh claude --project "$PWD"
+```dotenv
+AGENT_HOOKS_SIGN_URL=https://your-signing-tunnel.example.com
+AGENT_HOOKS_SIGN_PROGRAM=/opt/git-signing-bridge/signing/git-sign.py
+AGENT_HOOKS_SIGN_KEY_FILE=/opt/git-signing-bridge/key.pub
+AGENT_HOOKS_SIGN_TOKEN_FILE=/run/secrets/git-signing-token
 ```
 
-Use `codex` instead of `claude` for Codex, or `git-signing` to configure signing
-without registering hooks (including installations through a plugin manager).
+Enable `git-account`, then start a new session. In Claude Code Web, use
+`AGENT_HOOKS_SIGN_AUTH=proxy` and a Network secret as described below instead
+of the token-file setting. The secret's host must exactly match the tunnel
+hostname, with header `Authorization`, prefix `Bearer`, and the token as its
+value. The token stays outside the VM. See [Claude network secrets](https://code.claude.com/docs/en/cloud-environments#add-network-secrets).
+
+For manual setup, run `./install.sh claude --project "$PWD"`, use `codex`
+instead of `claude` for Codex, or use `git-signing` to configure signing
+without registering hooks.
 Use `--user` for global Git configuration. Project installation uses worktree
 configuration when enabled. Set the Git identity variables above to the name
 and email authorized by the bridge; signing setup does not infer an identity
@@ -202,10 +237,10 @@ either a token file or explicit proxy mode. With no signing variables set,
 installation leaves existing signing settings unchanged, including previously
 enabled remote signing. Partial or invalid settings fail installation.
 
-The installer enables `commit.gpgsign`, selects SSH signing, and points Git at
-this kit's adapter. It persists the URL, client/public-key paths, authorization
+The startup hook enables `commit.gpgsign`, selects SSH signing, and points Git
+at the adapter inside its installed plugin. It persists the URL, client/public-key paths, authorization
 mode, and token **path** in Git config; it never reads or saves the token's
-contents. Keep both checkouts and the configured files at their installed
+contents. Keep the plugin and the configured files at their installed
 paths. Later commits use the saved configuration even if setup variables are
 absent or stale. Ordinary local signature verification still uses `ssh-keygen`.
 `./install.sh status .` reports signing configuration without contacting the
@@ -218,20 +253,29 @@ own authorization or silently retry unsigned. It does not prevent an explicit
 `--no-gpg-sign` or a Git configuration change; agents must not use those to
 bypass a requested signature.
 
+`SessionStart` itself cannot block a session. If signing was requested but its
+configuration is invalid, the hook records a failed setup and enables Git's
+signing requirement, so commits fail until a successful startup repairs it.
+It also tells the agent to fix setup before committing. If Git config is
+unwritable, the hook can only report that failure. With no opt-in variables,
+it leaves existing identity and signing settings unchanged.
+
 For renewal, create a fresh bridge session and replace the protected token
 file or proxy secret. Replacing a token at the same path needs no reinstall.
-If the tunnel hostname, public key, client path, or token path changed, rerun
-the installer with the complete updated variables. Quick Tunnel hostnames can
+If the tunnel hostname, public key, client path, or token path changed, save
+the complete updated variables and start a new session, or rerun the Git-only
+installer in an existing session. Quick Tunnel hostnames can
 change on restart. Keep the Mac, 1Password, bridge, and tunnel available while
 the cloud agent signs commits.
 
-For Claude Code web setup, provide these variables at session startup alongside
-the identity variables; the existing session instructions run the installer in
-each work repo. `web/setup.sh` also applies global signing if the variables and
-files are already present during setup. For a Codex cloud environment, run the
-`codex --project` or `git-signing --project` installation step after provisioning
-the client, public key, and authorization. Harness-specific proxy delivery and
-network policy still need testing inside the actual cloud environment.
+Saved variables and network secrets are available after Claude starts, so the
+startup hook performs configuration then. Setup scripts only provision files
+and dependencies. For Codex, enable the plugin where hook execution is supported
+and trust its hooks with `/hooks`; scripts must exist in the execution
+environment. The Git-only installer remains available where plugin hooks are
+not deployed. See [Codex plugin hooks](https://developers.openai.com/plugins/build/plugins).
+Harness-specific cloud proxy delivery and network policy still need testing
+inside the actual cloud environment.
 
 ## Extending
 
@@ -301,7 +345,7 @@ In Claude Code on the web, set these in the environment's variables. With
 
 ## Notes
 
-- Checks fail open. A missing linter, a crashed check or an unknown payload
+- Lint and comment checks fail open. A missing linter, a crashed check or an unknown payload
   lets the action through.
 - Codex reports edits as `apply_patch` with the raw patch. `hook.sh` turns each
   file section into a before/after pair. Some Codex builds have been reported

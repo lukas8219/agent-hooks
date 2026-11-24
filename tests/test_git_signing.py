@@ -202,6 +202,7 @@ class GitSigningTests(unittest.TestCase):
         kit.mkdir()
         shutil.copy2(KIT / "install.sh", kit / "install.sh")
         shutil.copytree(KIT / "scripts", kit / "scripts")
+        shutil.copytree(KIT / "plugins/git-account", kit / "plugins/git-account")
         (kit / "plugins/coding-python").mkdir(parents=True)
         self.install(extra=self.options, kit=kit)
         self.assert_signed_commit()

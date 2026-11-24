@@ -1,4 +1,10 @@
-# agent-hooks: install the hooks before you start work
+# agent-hooks: prefer installed plugins
+
+The preferred setup enables the `git-account` plugin and the selected coding
+plugins. Its `SessionStart` hook configures Git identity and optional signing
+automatically. Do not run the manual installer when using installed plugins.
+The instructions below apply only when the user explicitly chose the alternative
+installer route by setting `AGENT_HOOKS_INSTALL_MODE=manual`.
 
 This file sets up the agent-hooks plugins: `coding-ruby` (RuboCop on the lines
 you change, a RuboCop gate on `git commit`, no new comments), `coding-python`
@@ -11,7 +17,8 @@ read either from the kit's own repo or from `~/.claude/CLAUDE.md`, where
 ## When to act
 
 Do this once, at the start of the session, **before any other work**, when
-`CLAUDE_CODE_REMOTE` is `true` (Claude Code on the web). Check with
+`CLAUDE_CODE_REMOTE` is `true` and `AGENT_HOOKS_INSTALL_MODE` is `manual`
+(the alternative Claude Code web installer route). Check with
 `echo "$CLAUDE_CODE_REMOTE"`. On a local machine, do nothing: there the kit is
 installed with `/plugin` or with `install.sh claude --user`, and running it again
 here would register every hook twice.

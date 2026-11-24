@@ -71,7 +71,7 @@ merge_hooks() {
   ours=$(selected_hooks)
   tmp=$(mktemp)
   jq --argjson ours "$ours" --argjson extra "$extra" '
-    def mine: (.command? // "") | test("/runtime/hook\\.sh|/adapters/(claude-code|codex)\\.sh");
+    def mine: (.command? // "") | test("/runtime/hook\\.sh|/adapters/(claude-code|codex)\\.sh|/plugins/git-account/scripts/session-start\\.py");
     . * $extra
     | .hooks //= {}
     | .hooks |= with_entries(.value |= [ .[] | .hooks |= map(select(mine | not)) | select(.hooks | length > 0) ])
@@ -233,8 +233,8 @@ status() {
   for f in "$HOME/.claude/settings.json" "${CODEX_HOME:-$HOME/.codex}/hooks.json" "${1:-.}/.claude/settings.json" "${1:-.}/.codex/hooks.json"; do
     [ -r "$f" ] || continue
     echo "$f"
-    jq -r '.hooks // {} | to_entries[] | .key as $e | .value[] | .matcher as $m
-           | .hooks[] | select(.command | test("/runtime/hook\\.sh"))
+    jq -r '.hooks // {} | to_entries[] | .key as $e | .value[] | (.matcher // "*") as $m
+           | .hooks[] | select(.command | test("/runtime/hook\\.sh|/plugins/git-account/scripts/session-start\\.py"))
            | "  \($e) \($m) -> \(.command | sub(".*/plugins/"; ""))"' "$f"
   done
   if git -C "${1:-.}" rev-parse --git-dir >/dev/null 2>&1; then
