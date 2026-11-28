@@ -28,6 +28,11 @@
       "name": "feature-graph",
       "source": "./plugins/feature-graph",
       "description": "Map cross-repository features in Neo4j and verify changed code"
+    },
+    {
+      "name": "skill-retro",
+      "source": "./plugins/skill-retro",
+      "description": "Offer to capture reusable work as agent skills and choose a project or marketplace destination"
     }
   ]
 }

@@ -44,6 +44,10 @@ while any copy is stale.
 `git-account` instead carries its own setup and signing adapter in `scripts/`;
 it works from an isolated plugin cache without the top-level installer.
 
+Set `SKILL_MARKETPLACE_REPO` in the agent environment to the local path or repository name
+of your skills marketplace. It defaults to `marketplace`; project-specific
+skills stay in the current project.
+
 ## Install
 
 Dependencies: `jq`, `git`, `ruby`, `python3`, `rubocop` (and `hunk`, optional).
@@ -71,6 +75,7 @@ tree are skipped, as with the Ruby hooks.
 /plugin install coding-ruby@agent-hooks     # and/or coding-python
 /plugin install coding-crystal@agent-hooks
 /plugin install feature-graph@agent-hooks
+/plugin install skill-retro@agent-hooks
 ```
 
 **Codex:**
@@ -81,10 +86,11 @@ codex plugin add git-account@agent-hooks
 codex plugin add coding-ruby@agent-hooks    # or pick in /plugins
 codex plugin add coding-crystal@agent-hooks
 codex plugin add feature-graph@agent-hooks
+codex plugin add skill-retro@agent-hooks
 ```
 
 For hook plugins, open `/hooks` in Codex once and trust the hooks. Installing
-a plugin doesn't trust its hooks. Installing `feature-graph` includes both skills.
+a plugin doesn't trust its hooks. Installing `feature-graph` includes both graph skills. `skill-retro` offers an optional end-of-turn skill proposal.
 
 The former `skills` plugin is now named `feature-graph`. If you installed it
 through a plugin manager, uninstall `skills` and install `feature-graph`.

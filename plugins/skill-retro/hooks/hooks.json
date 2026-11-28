@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"\u0024{CLAUDE_PLUGIN_ROOT}/scripts/stop-skill-retro.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
