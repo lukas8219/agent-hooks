@@ -44,7 +44,9 @@ while any copy is stale.
 `git-account` instead carries its own setup and signing adapter in `scripts/`;
 it works from an isolated plugin cache without the top-level installer.
 
-Set `SKILL_MARKETPLACE_REPO` in the agent environment to the local path or repository name of your skills marketplace. It defaults to `marketplace`; project-specific skills stay in the current project.
+Set `SKILL_MARKETPLACE_REPO` in the agent environment to the local path or repository name
+of your skills marketplace. It defaults to `marketplace`; project-specific
+skills stay in the current project.
 
 ## Install
 

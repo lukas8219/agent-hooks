@@ -6,14 +6,8 @@
   "plugins": [
     {
       "name": "git-account",
-      "source": {
-        "source": "local",
-        "path": "./plugins/git-account"
-      },
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL"
-      },
+      "source": {"source": "local", "path": "./plugins/git-account"},
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
       "category": "Productivity"
     },
     {
@@ -66,14 +60,8 @@
     },
     {
       "name": "skill-retro",
-      "source": {
-        "source": "local",
-        "path": "./plugins/skill-retro"
-      },
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL"
-      },
+      "source": {"source": "local", "path": "./plugins/skill-retro"},
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
       "category": "Productivity"
     }
   ]
