@@ -1,0 +1,9 @@
+{
+  "name": "skill-retro",
+  "version": "1.0.0",
+  "description": "Offer to capture reusable work as agent skills and choose a project or marketplace destination",
+  "author": {
+    "name": "Lucas Polesello"
+  },
+  "repository": "https://github.com/lukas8219/agent-hooks"
+}
